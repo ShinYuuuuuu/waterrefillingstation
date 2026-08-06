@@ -22,7 +22,7 @@ const decimalField = z.union([z.number(), z.string()])
  * Validates the request body only (used with the `validateBody` middleware).
  */
 export const createProductSchema = z.object({
-  categoryId: z.string().uuid('Category ID must be a valid UUID'),
+  categoryId: z.string().uuid('Category ID must be a valid UUID').optional(),
   sku: z.string().min(1, 'SKU is required').max(50),
   name: z.string().min(1, 'Product name is required').max(255),
   description: z.string().optional().nullable(),

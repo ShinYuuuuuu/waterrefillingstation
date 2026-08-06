@@ -44,6 +44,7 @@ export function errorHandler(err: Error, req: Request, res: Response, next: Next
       error: {
         code: err.name,
         message: err.message,
+        ...(err.details ? { details: err.details } : {}),
       },
     })
   }

@@ -30,6 +30,7 @@ export function globalErrorHandler(
       error: {
         code: 'VALIDATION_ERROR',
         message: err.message,
+        ...(err.details ? { details: err.details } : {}),
       },
     })
   }
@@ -39,6 +40,7 @@ export function globalErrorHandler(
     error: {
       code: err.name || 'INTERNAL_SERVER_ERROR',
       message: isOperational ? err.message : 'An unexpected error occurred',
+      ...(err.details ? { details: err.details } : {}),
       ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
     },
   })

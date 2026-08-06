@@ -51,6 +51,23 @@ export class ProductService {
       }
     }
 
+    // Auto-assign category if missing
+    if (!data.categoryId) {
+      let category = await prisma.productCategory.findFirst({
+        where: { tenant_id: ctx.tenantId, is_active: true, deleted_at: null },
+      })
+      if (!category) {
+        category = await prisma.productCategory.create({
+          data: {
+            tenant_id: ctx.tenantId,
+            name: 'Uncategorized',
+            is_active: true,
+          },
+        })
+      }
+      data.categoryId = category.id
+    }
+
     const created = await this.repository.create(data, ctx)
 
     await this.logAudit({

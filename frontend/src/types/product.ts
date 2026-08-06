@@ -45,7 +45,7 @@ export interface ProductListResponse {
 }
 
 export interface CreateProductRequest {
-  categoryId: string
+  categoryId?: string
   sku: string
   name: string
   description?: string | null

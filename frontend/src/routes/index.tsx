@@ -4,7 +4,7 @@ import { PublicRoute } from './public-route'
 import { AuthLayout } from '@/layouts/auth-layout'
 import { DashboardLayout } from '@/layouts/dashboard-layout'
 import { LoginPage } from '@/pages/login'
-import { DashboardPage } from '@/pages/dashboard'
+import { DashboardRouter } from './dashboard-router'
 import { CustomersPage } from '@/pages/customers'
 import { ProductsPage } from '@/pages/products'
 import { InventoryPage } from '@/pages/inventory'
@@ -43,7 +43,7 @@ export const AppRoutes = createBrowserRouter([
     element: (
       <ProtectedRoute requiredRoles={['owner', 'cashier', 'rider', 'super_admin']}>
         <DashboardLayout>
-          <DashboardPage />
+          <DashboardRouter />
         </DashboardLayout>
       </ProtectedRoute>
     ),

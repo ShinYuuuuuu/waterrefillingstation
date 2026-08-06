@@ -18,4 +18,5 @@ export const API_ENDPOINTS = {
   DASHBOARD: '/dashboard/kpis',
   SETTINGS: '/settings',
   NOTIFICATIONS: '/notifications/in-app',
+  GALLONS: '/gallons',
 } as const

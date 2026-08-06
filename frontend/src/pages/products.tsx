@@ -24,6 +24,19 @@ const PRODUCT_TYPES = [
   { value: 'SERVICE', label: 'Service' },
 ] as const
 
+const UNIT_OF_MEASURE_OPTIONS = [
+  { value: 'pcs', label: 'Pieces (pcs)' },
+  { value: 'L', label: 'Liters (L)' },
+  { value: 'kg', label: 'Kilograms (kg)' },
+  { value: 'g', label: 'Grams (g)' },
+  { value: 'box', label: 'Box' },
+  { value: 'case', label: 'Case' },
+  { value: 'set', label: 'Set' },
+  { value: 'bottle', label: 'Bottle' },
+  { value: 'gallon', label: 'Gallon' },
+  { value: 'service', label: 'Service' },
+]
+
 export function ProductsPage() {
   const queryClient = useQueryClient()
   const { addToast } = useToast()
@@ -83,7 +96,9 @@ export function ProductsPage() {
       addToast({ type: 'success', title: 'Product created successfully' })
     },
     onError: (err: any) => {
-      addToast({ type: 'error', title: err?.response?.data?.error?.message || 'Failed to create product' })
+      const details = err?.response?.data?.error?.details
+      const message = details?.[0]?.message || err?.response?.data?.error?.message || 'Failed to create product'
+      addToast({ type: 'error', title: message })
     },
   })
 
@@ -98,7 +113,9 @@ export function ProductsPage() {
       addToast({ type: 'success', title: 'Product updated successfully' })
     },
     onError: (err: any) => {
-      addToast({ type: 'error', title: err?.response?.data?.error?.message || 'Failed to update product' })
+      const details = err?.response?.data?.error?.details
+      const message = details?.[0]?.message || err?.response?.data?.error?.message || 'Failed to update product'
+      addToast({ type: 'error', title: message })
     },
   })
 
@@ -111,7 +128,6 @@ export function ProductsPage() {
     },
     onError: (err: any) => {
       addToast({ type: 'error', title: err?.response?.data?.error?.message || 'Failed to delete product' })
-      setDeleteTargetId(null)
     },
   })
 
@@ -166,12 +182,38 @@ export function ProductsPage() {
     return Object.keys(errors).length === 0
   }
 
+  const toNumber = (value: string | number) => {
+    const parsed = typeof value === 'string' ? parseFloat(value) : value
+    return Number.isNaN(parsed) ? 0 : parsed
+  }
+
+  const buildPayload = (): CreateProductRequest | UpdateProductRequest => {
+    const base = {
+      categoryId: formData.categoryId || undefined,
+      sku: formData.sku,
+      name: formData.name,
+      description: formData.description ?? null,
+      type: formData.type,
+      unitOfMeasure: formData.unitOfMeasure,
+      basePrice: toNumber(formData.basePrice),
+      costPrice: toNumber(formData.costPrice),
+      isContainer: formData.isContainer,
+      depositAmount: formData.isContainer ? toNumber(formData.depositAmount ?? 0) : null,
+      reorderLevel: toNumber(formData.reorderLevel),
+      isActive: formData.isActive,
+    }
+    if (editingProduct) {
+      return { ...base, categoryId: formData.categoryId || undefined }
+    }
+    return base
+  }
+
   const handleSubmit = () => {
     if (!validateForm()) return
     if (editingProduct) {
-      updateMutation.mutate({ id: editingProduct.id, payload: formData })
+      updateMutation.mutate({ id: editingProduct.id, payload: buildPayload() as UpdateProductRequest })
     } else {
-      createMutation.mutate(formData)
+      createMutation.mutate(buildPayload() as CreateProductRequest)
     }
   }
 
@@ -375,11 +417,12 @@ export function ProductsPage() {
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Unit of Measure *
               </label>
-              <Input
+              <Select
+                options={UNIT_OF_MEASURE_OPTIONS}
                 value={formData.unitOfMeasure}
                 onChange={(e) => setFormData({ ...formData, unitOfMeasure: e.target.value })}
-                placeholder="e.g. pcs, L, kg"
                 error={formErrors.unitOfMeasure}
+                placeholder="Select unit"
               />
             </div>
           </div>
@@ -391,8 +434,10 @@ export function ProductsPage() {
               </label>
               <Input
                 type="number"
+                step="0.01"
+                min="0"
                 value={formData.basePrice}
-                onChange={(e) => setFormData({ ...formData, basePrice: e.target.value ? Number(e.target.value) : 0 })}
+                onChange={(e) => setFormData({ ...formData, basePrice: e.target.value })}
                 placeholder="0.00"
               />
             </div>
@@ -402,8 +447,10 @@ export function ProductsPage() {
               </label>
               <Input
                 type="number"
+                step="0.01"
+                min="0"
                 value={formData.costPrice}
-                onChange={(e) => setFormData({ ...formData, costPrice: e.target.value ? Number(e.target.value) : 0 })}
+                onChange={(e) => setFormData({ ...formData, costPrice: e.target.value })}
                 placeholder="0.00"
               />
             </div>
@@ -416,6 +463,8 @@ export function ProductsPage() {
               </label>
               <Input
                 type="number"
+                min="0"
+                step="1"
                 value={formData.reorderLevel}
                 onChange={(e) => setFormData({ ...formData, reorderLevel: Number(e.target.value) })}
                 placeholder="0"
@@ -423,12 +472,18 @@ export function ProductsPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Category ID
+                Category
               </label>
-              <Input
+              <Select
+                options={[
+                  { value: '', label: 'No category' },
+                  { value: 'cat-water', label: 'Water' },
+                  { value: 'cat-containers', label: 'Containers' },
+                  { value: 'cat-accessories', label: 'Accessories' },
+                  { value: 'cat-raw-materials', label: 'Raw Materials' },
+                ]}
                 value={formData.categoryId}
                 onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
-                placeholder="Category UUID"
               />
             </div>
           </div>
@@ -467,6 +522,8 @@ export function ProductsPage() {
               </label>
               <Input
                 type="number"
+                step="0.01"
+                min="0"
                 value={formData.depositAmount ?? ''}
                 onChange={(e) => setFormData({ ...formData, depositAmount: e.target.value ? Number(e.target.value) : null })}
                 placeholder="0.00"
@@ -509,7 +566,11 @@ export function ProductsPage() {
         onClose={() => setDeleteTargetId(null)}
         onConfirm={handleDelete}
         title="Delete Product"
-        description="Are you sure you want to delete this product? This action cannot be undone."
+        description={
+          deleteTargetId
+            ? 'Are you sure you want to delete this product? This action cannot be undone.'
+            : ''
+        }
         confirmText="Delete"
         variant="danger"
         loading={isDeleting}

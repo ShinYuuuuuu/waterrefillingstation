@@ -40,7 +40,7 @@ export interface Product {
 // --- API request bodies (camelCase) -----------------------------------------
 
 export interface CreateProductRequest {
-  categoryId: string
+  categoryId?: string
   sku: string
   name: string
   description?: string | null
