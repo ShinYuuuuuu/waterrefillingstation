@@ -35,7 +35,15 @@ export function ProtectedRoute({
   }
 
   if (requiredRoles && requiredRoles.length > 0 && user) {
-    if (!requiredRoles.includes(user.role)) {
+    const userRole = typeof user.role === 'string' ? user.role.toLowerCase() : ''
+    const hasAccess = requiredRoles.some((role) => role.toLowerCase() === userRole)
+    console.log('[AUTH DEBUG] PROTECTED_ROUTE_ROLE_CHECK', {
+      userRole,
+      requiredRoles,
+      hasAccess,
+      pathname: location.pathname,
+    })
+    if (!hasAccess) {
       return <Navigate to="/unauthorized" replace />
     }
   }

@@ -41,7 +41,7 @@ export const AppRoutes = createBrowserRouter([
   {
     path: '/dashboard',
     element: (
-      <ProtectedRoute>
+      <ProtectedRoute requiredRoles={['owner', 'cashier', 'rider', 'super_admin']}>
         <DashboardLayout>
           <DashboardPage />
         </DashboardLayout>
@@ -51,7 +51,7 @@ export const AppRoutes = createBrowserRouter([
   {
     path: '/customers',
     element: (
-      <ProtectedRoute>
+      <ProtectedRoute requiredRoles={['owner', 'cashier', 'super_admin']}>
         <DashboardLayout>
           <CustomersPage />
         </DashboardLayout>
@@ -61,7 +61,7 @@ export const AppRoutes = createBrowserRouter([
   {
     path: '/products',
     element: (
-      <ProtectedRoute>
+      <ProtectedRoute requiredRoles={['owner', 'super_admin']}>
         <DashboardLayout>
           <ProductsPage />
         </DashboardLayout>
@@ -71,7 +71,7 @@ export const AppRoutes = createBrowserRouter([
   {
     path: '/inventory',
     element: (
-      <ProtectedRoute>
+      <ProtectedRoute requiredRoles={['owner', 'cashier', 'super_admin']}>
         <DashboardLayout>
           <InventoryPage />
         </DashboardLayout>
@@ -81,7 +81,7 @@ export const AppRoutes = createBrowserRouter([
   {
     path: '/gallons',
     element: (
-      <ProtectedRoute>
+      <ProtectedRoute requiredRoles={['owner', 'super_admin']}>
         <DashboardLayout>
           <GallonsPage />
         </DashboardLayout>
@@ -91,7 +91,7 @@ export const AppRoutes = createBrowserRouter([
   {
     path: '/sales',
     element: (
-      <ProtectedRoute>
+      <ProtectedRoute requiredRoles={['owner', 'cashier', 'super_admin']}>
         <DashboardLayout>
           <SalesPage />
         </DashboardLayout>
@@ -101,7 +101,7 @@ export const AppRoutes = createBrowserRouter([
   {
     path: '/deliveries',
     element: (
-      <ProtectedRoute>
+      <ProtectedRoute requiredRoles={['owner', 'cashier', 'rider', 'super_admin']}>
         <DashboardLayout>
           <DeliveriesPage />
         </DashboardLayout>
@@ -111,7 +111,7 @@ export const AppRoutes = createBrowserRouter([
   {
     path: '/reports',
     element: (
-      <ProtectedRoute>
+      <ProtectedRoute requiredRoles={['owner', 'super_admin']}>
         <DashboardLayout>
           <ReportsPage />
         </DashboardLayout>
@@ -121,7 +121,7 @@ export const AppRoutes = createBrowserRouter([
   {
     path: '/settings',
     element: (
-      <ProtectedRoute>
+      <ProtectedRoute requiredRoles={['owner', 'super_admin']}>
         <DashboardLayout>
           <SettingsPage />
         </DashboardLayout>
@@ -131,7 +131,7 @@ export const AppRoutes = createBrowserRouter([
   {
     path: '/profile',
     element: (
-      <ProtectedRoute>
+      <ProtectedRoute requiredRoles={['owner', 'cashier', 'rider', 'super_admin']}>
         <DashboardLayout>
           <ProfilePage />
         </DashboardLayout>

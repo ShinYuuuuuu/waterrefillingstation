@@ -41,12 +41,15 @@ export const authService = {
     console.log('[AUTH DEBUG] ME_RESPONSE', { status: meResponse.status, data: meResponse.data })
     const meData = meResponse.data.data
     console.log('[AUTH DEBUG] USER_EXTRACTION', { meData })
+    console.log('[AUTH DEBUG] ROLE_FROM_API', { rawRole: meData.role })
+    const normalizedRole = typeof meData.role === 'string' ? meData.role.toLowerCase() : 'customer'
+    console.log('[AUTH DEBUG] ROLE_NORMALIZED', { normalizedRole })
 
     const user: User = {
       id: meData.id,
       email: meData.email,
       full_name: meData.fullName,
-      role: meData.role as any,
+      role: normalizedRole as any,
       branch_id: meData.branchId,
       tenant_id: meData.tenantId,
       status: 'active',

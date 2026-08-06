@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { PageLayout } from '@/layouts/page-layout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { StatCard } from '@/components/ui/stat-card'
@@ -9,6 +10,7 @@ import { FiUsers, FiPackage, FiShoppingCart, FiTruck } from 'react-icons/fi'
 
 export function DashboardPage() {
   const [isLoading] = useState(false)
+  const navigate = useNavigate()
 
   const stats = [
     {
@@ -104,19 +106,19 @@ export function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-3">
-              <Button variant="outline" className="justify-start">
+              <Button variant="outline" className="justify-start" onClick={() => navigate('/sales')}>
                 <FiShoppingCart className="w-4 h-4 mr-2" />
                 New Sale
               </Button>
-              <Button variant="outline" className="justify-start">
+              <Button variant="outline" className="justify-start" onClick={() => navigate('/deliveries')}>
                 <FiTruck className="w-4 h-4 mr-2" />
                 New Delivery
               </Button>
-              <Button variant="outline" className="justify-start">
+              <Button variant="outline" className="justify-start" onClick={() => navigate('/customers')}>
                 <FiUsers className="w-4 h-4 mr-2" />
                 Add Customer
               </Button>
-              <Button variant="outline" className="justify-start">
+              <Button variant="outline" className="justify-start" onClick={() => navigate('/products')}>
                 <FiPackage className="w-4 h-4 mr-2" />
                 Add Product
               </Button>

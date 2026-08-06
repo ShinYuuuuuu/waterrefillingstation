@@ -29,61 +29,61 @@ const menuItems: MenuItem[] = [
     href: '/dashboard',
     label: 'Dashboard',
     icon: FiLayout,
-    roles: ['OWNER', 'BRANCH_MANAGER', 'CASHIER', 'INVENTORY_STAFF', 'RIDER', 'DISPATCHER', 'ACCOUNTANT', 'RESELLER', 'CUSTOMER', 'TECHNICIAN', 'SUPER_ADMIN'],
+    roles: ['owner', 'cashier', 'rider', 'super_admin'],
   },
   {
     href: '/customers',
     label: 'Customers',
     icon: FiUsers,
-    roles: ['OWNER', 'BRANCH_MANAGER', 'CASHIER', 'SUPER_ADMIN'],
+    roles: ['owner', 'cashier', 'super_admin'],
   },
   {
     href: '/products',
     label: 'Products',
     icon: FiPackage,
-    roles: ['OWNER', 'BRANCH_MANAGER', 'INVENTORY_STAFF', 'SUPER_ADMIN'],
+    roles: ['owner', 'super_admin'],
   },
   {
     href: '/inventory',
     label: 'Inventory',
     icon: FiPackage,
-    roles: ['OWNER', 'BRANCH_MANAGER', 'INVENTORY_STAFF', 'SUPER_ADMIN'],
+    roles: ['owner', 'cashier', 'super_admin'],
   },
   {
     href: '/gallons',
     label: 'Gallons',
     icon: FiShoppingCart,
-    roles: ['OWNER', 'BRANCH_MANAGER', 'CASHIER', 'INVENTORY_STAFF', 'SUPER_ADMIN'],
+    roles: ['owner', 'super_admin'],
   },
   {
     href: '/sales',
     label: 'Sales',
     icon: FiShoppingCart,
-    roles: ['OWNER', 'BRANCH_MANAGER', 'CASHIER', 'SUPER_ADMIN'],
+    roles: ['owner', 'cashier', 'super_admin'],
   },
   {
     href: '/deliveries',
     label: 'Deliveries',
     icon: FiTruck,
-    roles: ['OWNER', 'BRANCH_MANAGER', 'RIDER', 'DISPATCHER', 'SUPER_ADMIN'],
+    roles: ['owner', 'cashier', 'rider', 'super_admin'],
   },
   {
     href: '/reports',
     label: 'Reports',
     icon: FiBarChart2,
-    roles: ['OWNER', 'BRANCH_MANAGER', 'ACCOUNTANT', 'SUPER_ADMIN'],
+    roles: ['owner', 'super_admin'],
   },
   {
     href: '/settings',
     label: 'Settings',
     icon: FiSettings,
-    roles: ['OWNER', 'SUPER_ADMIN'],
+    roles: ['owner', 'super_admin'],
   },
   {
     href: '/profile',
     label: 'Profile',
     icon: FiUser,
-    roles: ['OWNER', 'BRANCH_MANAGER', 'CASHIER', 'INVENTORY_STAFF', 'RIDER', 'DISPATCHER', 'ACCOUNTANT', 'RESELLER', 'CUSTOMER', 'TECHNICIAN', 'SUPER_ADMIN'],
+    roles: ['owner', 'cashier', 'rider', 'super_admin'],
   },
 ]
 
@@ -102,7 +102,7 @@ export function Sidebar() {
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200 dark:border-gray-700">
         {!collapsed && (
-          <Link to="/" className="flex items-center gap-2">
+          <Link to="/dashboard" className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-primary-600 flex items-center justify-center">
               <span className="text-white font-bold text-sm">W</span>
             </div>
