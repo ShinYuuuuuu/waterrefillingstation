@@ -69,7 +69,7 @@ export function requirePermission(permissionCode: string) {
           role: {
             include: {
               role_permissions: {
-                where: { permission_id: permissionCode },
+                where: { permission: { code: permissionCode } },
               },
             },
           },

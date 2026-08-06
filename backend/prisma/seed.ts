@@ -155,6 +155,112 @@ async function main() {
   // Get role codes for assignment
   const roleMap = new Map(roles.map((r) => [r.code, r.id]))
 
+  // Create Permissions
+  const permissions = await prisma.permission.createMany({
+    data: [
+      { tenant_id: tenant.id, module: 'customer', action: 'read', code: 'customers.read', description: 'View customer list and details' },
+      { tenant_id: tenant.id, module: 'customer', action: 'create', code: 'customers.create', description: 'Create new customers' },
+      { tenant_id: tenant.id, module: 'customer', action: 'update', code: 'customers.update', description: 'Update customer details' },
+      { tenant_id: tenant.id, module: 'customer', action: 'delete', code: 'customers.delete', description: 'Delete/deactivate customers' },
+      { tenant_id: tenant.id, module: 'product', action: 'read', code: 'products.read', description: 'View product list and details' },
+      { tenant_id: tenant.id, module: 'product', action: 'create', code: 'products.create', description: 'Create new products' },
+      { tenant_id: tenant.id, module: 'product', action: 'update', code: 'products.update', description: 'Update product details' },
+      { tenant_id: tenant.id, module: 'product', action: 'delete', code: 'products.delete', description: 'Delete/deactivate products' },
+      { tenant_id: tenant.id, module: 'inventory', action: 'read', code: 'inventory.read', description: 'View inventory levels' },
+      { tenant_id: tenant.id, module: 'inventory', action: 'create', code: 'inventory.create', description: 'Create inventory records' },
+      { tenant_id: tenant.id, module: 'inventory', action: 'update', code: 'inventory.update', description: 'Update inventory records' },
+      { tenant_id: tenant.id, module: 'inventory', action: 'delete', code: 'inventory.delete', description: 'Delete inventory records' },
+      { tenant_id: tenant.id, module: 'inventory', action: 'production_create', code: 'inventory.production.create', description: 'Create production batches' },
+      { tenant_id: tenant.id, module: 'inventory', action: 'production_read', code: 'inventory.production.read', description: 'View production batches' },
+      { tenant_id: tenant.id, module: 'inventory', action: 'production_update', code: 'inventory.production.update', description: 'Update production batches' },
+      { tenant_id: tenant.id, module: 'inventory', action: 'transfer_create', code: 'inventory.transfer.create', description: 'Create stock transfers' },
+      { tenant_id: tenant.id, module: 'inventory', action: 'transfer_approve', code: 'inventory.transfer.approve', description: 'Approve stock transfers' },
+      { tenant_id: tenant.id, module: 'inventory', action: 'transfer_receive', code: 'inventory.transfer.receive', description: 'Receive stock transfers' },
+      { tenant_id: tenant.id, module: 'inventory', action: 'stock_count_start', code: 'inventory.stock_count.start', description: 'Start stock counts' },
+      { tenant_id: tenant.id, module: 'inventory', action: 'stock_count_approve', code: 'inventory.stock_count.approve', description: 'Approve stock counts' },
+      { tenant_id: tenant.id, module: 'inventory', action: 'adjust', code: 'inventory.adjust', description: 'Adjust inventory' },
+      { tenant_id: tenant.id, module: 'inventory', action: 'ledger_read', code: 'inventory.ledger.read', description: 'View inventory ledger' },
+      { tenant_id: tenant.id, module: 'inventory', action: 'alerts_read', code: 'inventory.alerts.read', description: 'View inventory alerts' },
+      { tenant_id: tenant.id, module: 'sales', action: 'read', code: 'sales.read', description: 'View sales transactions' },
+      { tenant_id: tenant.id, module: 'sales', action: 'create', code: 'sales.create', description: 'Create sales transactions' },
+      { tenant_id: tenant.id, module: 'sales', action: 'update', code: 'sales.update', description: 'Update sales transactions' },
+      { tenant_id: tenant.id, module: 'sales', action: 'delete', code: 'sales.delete', description: 'Delete sales transactions' },
+      { tenant_id: tenant.id, module: 'sales', action: 'void', code: 'sales.void', description: 'Void sales transactions' },
+      { tenant_id: tenant.id, module: 'sales', action: 'payment', code: 'sales.payment', description: 'Record payments' },
+      { tenant_id: tenant.id, module: 'gallons', action: 'read', code: 'gallons.read', description: 'View gallon assets' },
+      { tenant_id: tenant.id, module: 'gallons', action: 'create', code: 'gallons.create', description: 'Create gallon records' },
+      { tenant_id: tenant.id, module: 'gallons', action: 'update', code: 'gallons.update', description: 'Update gallon records' },
+      { tenant_id: tenant.id, module: 'gallons', action: 'delete', code: 'gallons.delete', description: 'Delete gallon records' },
+    ],
+    skipDuplicates: true,
+  })
+  console.log('Created permissions:', permissions.count)
+
+  const permissionMap = new Map((await prisma.permission.findMany({ where: { tenant_id: tenant.id } })).map((p) => [p.code, p.id]))
+
+  // Helper to assign permissions to a role
+  async function assignPermissions(roleCode: string, permissionCodes: string[]) {
+    const roleId = roleMap.get(roleCode)
+    if (!roleId) return
+    const rolePermissions = permissionCodes.map((code) => ({
+      tenant_id: tenant.id,
+      role_id: roleId,
+      permission_id: permissionMap.get(code)!,
+    })).filter((rp) => rp.permission_id)
+    if (rolePermissions.length > 0) {
+      await prisma.rolePermission.createMany({ data: rolePermissions, skipDuplicates: true })
+    }
+  }
+
+  // Owner gets all permissions
+  await assignPermissions('owner', Array.from(permissionMap.keys()))
+
+  // Cashier permissions
+  await assignPermissions('cashier', [
+    'customers.read', 'customers.create', 'customers.update', 'customers.delete',
+    'inventory.read', 'inventory.create', 'inventory.update',
+    'sales.read', 'sales.create', 'sales.update', 'sales.payment',
+    'gallons.read',
+  ])
+
+  // Rider permissions
+  await assignPermissions('rider', [
+    'sales.read', 'sales.create', 'sales.update', 'sales.payment',
+    'gallons.read',
+  ])
+
+  // Branch manager permissions
+  await assignPermissions('branch_manager', [
+    'customers.read', 'customers.create', 'customers.update', 'customers.delete',
+    'inventory.read', 'inventory.create', 'inventory.update',
+    'sales.read', 'sales.create', 'sales.update',
+    'gallons.read', 'gallons.create', 'gallons.update', 'gallons.delete',
+  ])
+
+  // Dispatcher permissions
+  await assignPermissions('dispatcher', [
+    'sales.read', 'sales.create', 'sales.update', 'sales.payment',
+  ])
+
+  // Accountant permissions
+  await assignPermissions('accountant', [
+    'sales.read', 'sales.payment',
+  ])
+
+  // Inventory staff permissions
+  await assignPermissions('inventory_staff', [
+    'inventory.read', 'inventory.create', 'inventory.update',
+    'inventory.production.create', 'inventory.production.read', 'inventory.production.update',
+    'inventory.transfer.create', 'inventory.transfer.receive',
+    'inventory.stock_count.start', 'inventory.adjust',
+    'inventory.ledger.read', 'inventory.alerts.read',
+  ])
+
+  // Technician permissions
+  await assignPermissions('technician', [
+    'gallons.read', 'gallons.update',
+  ])
+
   // Create Admin User (Owner)
   const adminUser = await prisma.user.create({
     data: {
