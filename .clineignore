@@ -1,0 +1,109 @@
+# Dependencies
+node_modules/
+vendor/
+lib/
+third-party/
+
+# Build output
+dist/
+build/
+out/
+target/
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.*
+
+# Lock files
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+Gemfile.lock
+Cargo.lock
+go.sum
+*.sln
+*.csproj
+
+# Images
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.ico
+*.bmp
+*.webp
+
+# Videos
+*.mp4
+*.mov
+*.avi
+*.mkv
+
+# Archives
+*.zip
+*.rar
+*.7z
+*.tar.gz
+*.tar.bz2
+*.tar
+
+# Cache
+.cache/
+.next/
+.vite/
+coverage/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.tox/
+.eggs/
+*.egg-info/
+
+# Python
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+
+# Java
+*.jar
+*.war
+*.ear
+.mvn/
+
+# PHP
+composer.lock
+.phpstorm.meta.php
+
+# Rust
+target/
+
+# IDE
+.idea/
+.vscode/
+.vscode-test/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# Generated files
+*.generated.*
+generated/
+auto-generated/
+
+# Binaries
+*.exe
+*.dll
+*.so
+*.dylib

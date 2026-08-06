@@ -1,0 +1,21 @@
+export const API_ENDPOINTS = {
+  AUTH: {
+    LOGIN: '/auth/login',
+    LOGOUT: '/auth/logout',
+    REFRESH: '/auth/refresh-token',
+    CHANGE_PASSWORD: '/auth/change-password',
+  },
+  USERS: '/users',
+  BRANCHES: '/branches',
+  PRODUCTS: '/products',
+  INVENTORY: '/inventory',
+  CONTAINERS: '/containers',
+  CUSTOMERS: '/customers',
+  SALES: '/sales',
+  DELIVERIES: '/delivery/orders',
+  PAYMENTS: '/payments',
+  REPORTS: '/reports',
+  DASHBOARD: '/dashboard/kpis',
+  SETTINGS: '/settings',
+  NOTIFICATIONS: '/notifications/in-app',
+} as const

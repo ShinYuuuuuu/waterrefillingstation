@@ -1,0 +1,16 @@
+{
+  "name": "puter-test",
+  "version": "1.0.0",
+  "description": "A minimal Node.js project for testing Puter AI.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@heyputer/puter.js": "^2.6.0"
+  }
+}

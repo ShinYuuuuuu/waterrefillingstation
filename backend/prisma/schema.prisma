@@ -1,0 +1,1806 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id                  String             @id @default(uuid())
+  name                String
+  subscription_plan   String?
+  subscription_status String?
+  is_active           Boolean            @default(true)
+  created_at          DateTime           @default(now()) @db.Timestamp(6)
+  updated_at          DateTime           @default(now()) @db.Timestamp(6)
+  deleted_at          DateTime?          @db.Timestamp(6)
+  created_by          String?
+  audit_logs          AuditLog[]
+  backups             Backup[]
+  branch_inventories  BranchInventory[]
+  branches            Branch[]
+  customers           Customer[]
+  delivery_orders     DeliveryOrder[]
+  integrations        Integration[]
+  inventory_ledgers   InventoryLedger[]
+  notifications       Notification[]
+  permissions         Permission[]
+  product_categories  ProductCategory[]
+  products            Product[]
+  roles               Role[]
+  sales_transactions  SalesTransaction[]
+  settings            Setting[]
+  users               User[]
+
+  @@map("tenants")
+}
+
+model Branch {
+  id                     String               @id @default(uuid())
+  tenant_id              String
+  name                   String
+  address                String?
+  contact_number         String?
+  email                  String?
+  tin                    String?
+  is_hq                  Boolean              @default(false)
+  is_active              Boolean              @default(true)
+  business_hours         Json?
+  created_at             DateTime             @default(now()) @db.Timestamp(6)
+  updated_at             DateTime             @default(now()) @db.Timestamp(6)
+  deleted_at             DateTime?            @db.Timestamp(6)
+  created_by             String?
+  branch_inventories     BranchInventory[]
+  tenant                 Tenant               @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  container_movements    ContainerMovement[]
+  customer_ledgers       CustomerLedger[]
+  customers              Customer[]
+  delivery_orders        DeliveryOrder[]
+  delivery_routes        DeliveryRoute[]
+  equipment              Equipment[]
+  gallons                Gallon[]
+  installment_plans      InstallmentPlan[]
+  inventory_ledgers      InventoryLedger[]
+  production_batches     ProductionBatch[]
+  rider_shifts           RiderShift[]
+  sales_transactions     SalesTransaction[]
+  settings               Setting[]
+  shifts                 Shift[]
+  stock_count_sessions   StockCountSession[]
+  stock_transfers_dest   StockTransfer[]      @relation("StockTransferDestination")
+  stock_transfers_origin StockTransfer[]      @relation("StockTransferOrigin")
+  user_role_assignments  UserRoleAssignment[]
+  users                  User[]
+
+  @@map("branches")
+}
+
+model User {
+  id                  String                 @id @default(uuid())
+  tenant_id           String
+  branch_id           String?
+  full_name           String
+  email               String                 @unique
+  phone               String?
+  password_hash       String
+  pin_hash            String?
+  status              String                 @default("active")
+  last_login_at       DateTime?              @db.Timestamp(6)
+  created_at          DateTime               @default(now()) @db.Timestamp(6)
+  updated_at          DateTime               @default(now()) @db.Timestamp(6)
+  deleted_at          DateTime?              @db.Timestamp(6)
+  created_by          String?
+  audit_logs          AuditLog[]
+  container_movements ContainerMovement[]    @relation("ContainerMovementUser")
+  delivery_orders     DeliveryOrder[]        @relation("AssignedRider")
+  delivery_routes     DeliveryRoute[]
+  gallon_cleanings    GallonCleaningRecord[]
+  gallon_fill_logs    GallonFillLog[]
+  gallon_inspections  GallonInspection[]
+  maintenance_logs    MaintenanceLog[]
+  payments            Payment[]              @relation("PaymentCollectedBy")
+  production_batches  ProductionBatch[]
+  refresh_tokens      RefreshToken[]
+  rider_shifts        RiderShift[]
+  sales_transactions  SalesTransaction[]     @relation("SalesTransactionUser")
+  shifts              Shift[]
+  user_roles          UserRoleAssignment[]
+  branch              Branch?                @relation(fields: [branch_id], references: [id])
+  tenant              Tenant                 @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, branch_id])
+  @@index([email])
+  @@map("users")
+}
+
+model Role {
+  id               String               @id @default(uuid())
+  tenant_id        String
+  code             String
+  name             String
+  description      String?
+  is_system        Boolean              @default(false)
+  is_active        Boolean              @default(true)
+  created_at       DateTime             @default(now()) @db.Timestamp(6)
+  updated_at       DateTime             @default(now()) @db.Timestamp(6)
+  deleted_at       DateTime?            @db.Timestamp(6)
+  role_permissions RolePermission[]
+  tenant           Tenant               @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  user_roles       UserRoleAssignment[]
+
+  @@unique([tenant_id, code])
+  @@map("roles")
+}
+
+model Permission {
+  id               String           @id @default(uuid())
+  tenant_id        String
+  module           String
+  action           String
+  code             String           @unique
+  description      String?
+  created_at       DateTime         @default(now()) @db.Timestamp(6)
+  deleted_at       DateTime?        @db.Timestamp(6)
+  tenant           Tenant           @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  role_permissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model UserRoleAssignment {
+  id          String    @id @default(uuid())
+  tenant_id   String
+  user_id     String
+  role_id     String
+  branch_id   String?
+  is_active   Boolean   @default(true)
+  assigned_at DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at  DateTime? @db.Timestamp(6)
+  assigned_by String?
+  branch      Branch?   @relation(fields: [branch_id], references: [id])
+  role        Role      @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, role_id, branch_id])
+  @@index([tenant_id])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  id            String     @id @default(uuid())
+  tenant_id     String
+  role_id       String
+  permission_id String
+  created_at    DateTime   @default(now()) @db.Timestamp(6)
+  deleted_at    DateTime?  @db.Timestamp(6)
+  permission    Permission @relation(fields: [permission_id], references: [id], onDelete: Cascade)
+  role          Role       @relation(fields: [role_id], references: [id], onDelete: Cascade)
+
+  @@unique([role_id, permission_id])
+  @@index([tenant_id])
+  @@map("role_permissions")
+}
+
+model RefreshToken {
+  id         String    @id @default(uuid())
+  tenant_id  String
+  user_id    String
+  token      String    @unique
+  expires_at DateTime  @db.Timestamp(6)
+  revoked    Boolean   @default(false)
+  created_at DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at DateTime? @db.Timestamp(6)
+  user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id])
+  @@map("refresh_tokens")
+}
+
+model AuditLog {
+  id          String    @id @default(uuid())
+  tenant_id   String
+  user_id     String?
+  action      String
+  entity_type String
+  entity_id   String
+  before_data Json?
+  after_data  Json?
+  ip_address  String?
+  user_agent  String?
+  created_at  DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at  DateTime? @db.Timestamp(6)
+  tenant      Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  user        User?     @relation(fields: [user_id], references: [id])
+
+  @@index([tenant_id, entity_type, entity_id])
+  @@index([created_at])
+  @@map("audit_logs")
+}
+
+model Setting {
+  id          String    @id @default(uuid())
+  tenant_id   String
+  branch_id   String?
+  key         String
+  value       Json
+  description String?
+  updated_at  DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at  DateTime? @db.Timestamp(6)
+  updated_by  String?
+  branch      Branch?   @relation(fields: [branch_id], references: [id])
+  tenant      Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, branch_id, key])
+  @@map("settings")
+}
+
+model Backup {
+  id            String    @id @default(uuid())
+  tenant_id     String
+  file_path     String?
+  file_url      String?
+  size_bytes    BigInt?
+  status        String
+  triggered_by  String
+  started_at    DateTime  @db.Timestamp(6)
+  completed_at  DateTime? @db.Timestamp(6)
+  error_message String?
+  created_at    DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at    DateTime? @db.Timestamp(6)
+  tenant        Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@map("backups")
+}
+
+model Integration {
+  id               String    @id @default(uuid())
+  tenant_id        String
+  provider         String
+  name             String
+  config           Json
+  status           String    @default("active")
+  last_test_at     DateTime? @db.Timestamp(6)
+  last_test_status String?
+  created_at       DateTime  @default(now()) @db.Timestamp(6)
+  updated_at       DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at       DateTime? @db.Timestamp(6)
+  tenant           Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  webhooks         Webhook[]
+
+  @@unique([tenant_id, provider])
+  @@map("integrations")
+}
+
+model Webhook {
+  id             String      @id @default(uuid())
+  integration_id String
+  event          String
+  url            String
+  secret         String?
+  is_active      Boolean     @default(true)
+  created_at     DateTime    @default(now()) @db.Timestamp(6)
+  deleted_at     DateTime?   @db.Timestamp(6)
+  integration    Integration @relation(fields: [integration_id], references: [id], onDelete: Cascade)
+
+  @@map("webhooks")
+}
+
+model FeatureFlag {
+  id          String    @id @default(uuid())
+  tenant_id   String
+  key         String
+  is_enabled  Boolean   @default(false)
+  description String?
+  updated_at  DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at  DateTime? @db.Timestamp(6)
+  updated_by  String?
+
+  @@unique([tenant_id, key])
+  @@map("feature_flags")
+}
+
+model ProductCategory {
+  id          String            @id @default(uuid())
+  tenant_id   String
+  name        String
+  description String?
+  parent_id   String?
+  is_active   Boolean           @default(true)
+  created_at  DateTime          @default(now()) @db.Timestamp(6)
+  updated_at  DateTime          @default(now()) @db.Timestamp(6)
+  deleted_at  DateTime?         @db.Timestamp(6)
+  parent      ProductCategory?  @relation("CategoryHierarchy", fields: [parent_id], references: [id])
+  children    ProductCategory[] @relation("CategoryHierarchy")
+  tenant      Tenant            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  products    Product[]
+
+  @@index([tenant_id])
+  @@map("product_categories")
+}
+
+model Product {
+  id                                    String                              @id @default(uuid())
+  tenant_id                             String
+  category_id                           String
+  sku                                   String
+  name                                  String
+  description                           String?
+  type                                  ProductType
+  unit_of_measure                       String
+  base_price                            Decimal                             @db.Decimal(12, 2)
+  cost_price                            Decimal                             @db.Decimal(12, 2)
+  is_container                          Boolean                             @default(false)
+  deposit_amount                        Decimal?                            @db.Decimal(12, 2)
+  reorder_level                         Int                                 @default(0)
+  is_active                             Boolean                             @default(true)
+  created_at                            DateTime                            @default(now()) @db.Timestamp(6)
+  updated_at                            DateTime                            @default(now()) @db.Timestamp(6)
+  deleted_at                            DateTime?                           @db.Timestamp(6)
+  created_by                            String?
+  branch_inventories                    BranchInventory[]
+  container_deposits                    ContainerDeposit[]
+  customer_container_balances           CustomerContainerBalance[]
+  delivery_order_items                  DeliveryOrderItem[]
+  gallon_types                          GallonType[]
+  inventory_ledgers                     InventoryLedger[]
+  production_batches                    ProductionBatch[]                   @relation("ProductionOutput")
+  category                              ProductCategory                     @relation(fields: [category_id], references: [id])
+  tenant                                Tenant                              @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  purchase_items                        PurchaseItem[]
+  reseller_consignments                 ResellerConsignment[]
+  sales_transaction_container_exchanges SalesTransactionContainerExchange[]
+  sales_transaction_items               SalesTransactionItem[]
+  standing_order_items                  StandingOrderItem[]
+  stock_count_items                     StockCountItem[]
+  stock_transfer_items                  StockTransferItem[]
+
+  @@unique([tenant_id, sku])
+  @@index([category_id])
+  @@index([type])
+  @@map("products")
+}
+
+model BranchInventory {
+  id                String    @id @default(uuid())
+  tenant_id         String
+  branch_id         String
+  product_id        String
+  quantity_on_hand  Int       @default(0)
+  reserved_quantity Int       @default(0)
+  last_counted_at   DateTime? @db.Timestamp(6)
+  created_at        DateTime  @default(now()) @db.Timestamp(6)
+  updated_at        DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at        DateTime? @db.Timestamp(6)
+  branch            Branch    @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+  product           Product   @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  tenant            Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@unique([branch_id, product_id])
+  @@index([tenant_id])
+  @@map("branch_inventory")
+}
+
+model InventoryLedger {
+  id             String       @id @default(uuid())
+  tenant_id      String
+  branch_id      String
+  product_id     String
+  movement_type  MovementType
+  quantity_delta Int
+  reference_type String?
+  reference_id   String?
+  notes          String?
+  created_at     DateTime     @default(now()) @db.Timestamp(6)
+  deleted_at     DateTime?    @db.Timestamp(6)
+  created_by     String?
+  branch         Branch       @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+  product        Product      @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  tenant         Tenant       @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, branch_id, product_id])
+  @@index([created_at])
+  @@map("inventory_ledger")
+}
+
+model GallonType {
+  id              String    @id @default(uuid())
+  tenant_id       String
+  product_id      String
+  name            String
+  description     String?
+  capacity_liters Decimal?  @db.Decimal(6, 2)
+  material        String?
+  color           String?
+  is_active       Boolean   @default(true)
+  created_at      DateTime  @default(now()) @db.Timestamp(6)
+  updated_at      DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at      DateTime? @db.Timestamp(6)
+  product         Product   @relation(fields: [product_id], references: [id])
+  gallons         Gallon[]
+
+  @@unique([tenant_id, product_id])
+  @@map("gallon_types")
+}
+
+model Gallon {
+  id                          String                              @id @default(uuid())
+  tenant_id                   String
+  branch_id                   String
+  gallon_type_id              String
+  tag_code                    String                              @unique
+  serial_number               String?                             @unique
+  status                      ContainerStatus                     @default(IN_STOCK)
+  current_holder_type         String?
+  current_holder_id           String?
+  current_condition           String?
+  purchase_date               DateTime?                           @db.Timestamp(6)
+  purchase_price              Decimal?                            @db.Decimal(10, 2)
+  last_cleaned_at             DateTime?                           @db.Timestamp(6)
+  last_inspected_at           DateTime?                           @db.Timestamp(6)
+  last_filled_at              DateTime?                           @db.Timestamp(6)
+  total_fill_count            Int                                 @default(0)
+  total_cleanings             Int                                 @default(0)
+  is_active                   Boolean                             @default(true)
+  created_at                  DateTime                            @default(now()) @db.Timestamp(6)
+  updated_at                  DateTime                            @default(now()) @db.Timestamp(6)
+  deleted_at                  DateTime?                           @db.Timestamp(6)
+  container_deposits          ContainerDeposit[]
+  container_movements         ContainerMovement[]
+  cleaning_records            GallonCleaningRecord[]
+  fill_logs                   GallonFillLog[]
+  inspections                 GallonInspection[]
+  status_history              GallonStatusHistory[]
+  branch                      Branch                              @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+  gallon_type                 GallonType                          @relation(fields: [gallon_type_id], references: [id])
+  sales_transaction_exchanges SalesTransactionContainerExchange[]
+
+  @@index([tenant_id, branch_id])
+  @@index([status])
+  @@index([tag_code])
+  @@map("gallons")
+}
+
+model GallonStatusHistory {
+  id         String          @id @default(uuid())
+  tenant_id  String
+  gallon_id  String
+  status     ContainerStatus
+  reason     String?
+  changed_by String?
+  changed_at DateTime        @default(now()) @db.Timestamp(6)
+  deleted_at DateTime?       @db.Timestamp(6)
+  notes      String?
+  gallon     Gallon          @relation(fields: [gallon_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id])
+  @@index([gallon_id, changed_at])
+  @@map("gallon_status_history")
+}
+
+model GallonCleaningRecord {
+  id              String    @id @default(uuid())
+  gallon_id       String
+  branch_id       String
+  cleaned_by      String
+  cleaning_type   String
+  used_detergents Json?
+  ph_level        Decimal?  @db.Decimal(4, 2)
+  is_passed       Boolean   @default(true)
+  notes           String?
+  cleaned_at      DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at      DateTime? @db.Timestamp(6)
+  cleaner         User      @relation(fields: [cleaned_by], references: [id])
+  gallon          Gallon    @relation(fields: [gallon_id], references: [id], onDelete: Cascade)
+
+  @@index([gallon_id, cleaned_at])
+  @@map("gallon_cleaning_records")
+}
+
+model GallonInspection {
+  id            String    @id @default(uuid())
+  tenant_id     String
+  gallon_id     String
+  branch_id     String
+  inspected_by  String
+  condition     String
+  has_cracks    Boolean   @default(false)
+  has_stains    Boolean   @default(false)
+  is_odor_free  Boolean   @default(true)
+  seal_intact   Boolean   @default(true)
+  overall_grade String?
+  notes         String?
+  passed        Boolean   @default(true)
+  inspected_at  DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at    DateTime? @db.Timestamp(6)
+  gallon        Gallon    @relation(fields: [gallon_id], references: [id], onDelete: Cascade)
+  inspector     User      @relation(fields: [inspected_by], references: [id])
+
+  @@index([tenant_id])
+  @@index([gallon_id, inspected_at])
+  @@map("gallon_inspections")
+}
+
+model GallonFillLog {
+  id                   String    @id @default(uuid())
+  tenant_id            String
+  gallon_id            String
+  branch_id            String
+  production_batch_id  String?
+  filled_by            String
+  fill_volume_liters   Decimal   @db.Decimal(6, 2)
+  water_source         String?
+  purification_stages  Json?
+  quality_check_passed Boolean   @default(true)
+  ph_level             Decimal?  @db.Decimal(4, 2)
+  tds_level            Decimal?  @db.Decimal(6, 2)
+  filled_at            DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at           DateTime? @db.Timestamp(6)
+  fill_operator        User      @relation(fields: [filled_by], references: [id])
+  gallon               Gallon    @relation(fields: [gallon_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id])
+  @@index([gallon_id, filled_at])
+  @@map("gallon_fill_logs")
+}
+
+model ProductionBatch {
+  id                   String    @id @default(uuid())
+  tenant_id            String
+  branch_id            String
+  batch_number         String
+  raw_input_liters     Decimal?  @db.Decimal(10, 2)
+  output_product_id    String
+  output_quantity      Int
+  operator_id          String
+  quality_check_passed Boolean   @default(false)
+  quality_notes        String?
+  started_at           DateTime  @db.Timestamp(6)
+  completed_at         DateTime? @db.Timestamp(6)
+  created_at           DateTime  @default(now()) @db.Timestamp(6)
+  updated_at           DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at           DateTime? @db.Timestamp(6)
+  branch               Branch    @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+  operator             User      @relation(fields: [operator_id], references: [id])
+  output_product       Product   @relation("ProductionOutput", fields: [output_product_id], references: [id])
+
+  @@unique([tenant_id, batch_number])
+  @@index([branch_id, completed_at])
+  @@map("production_batches")
+}
+
+model Supplier {
+  id             String     @id @default(uuid())
+  tenant_id      String
+  name           String
+  contact_person String?
+  email          String?
+  phone          String?
+  address        String?
+  tin            String?
+  is_active      Boolean    @default(true)
+  created_at     DateTime   @default(now()) @db.Timestamp(6)
+  updated_at     DateTime   @default(now()) @db.Timestamp(6)
+  deleted_at     DateTime?  @db.Timestamp(6)
+  purchases      Purchase[]
+
+  @@index([tenant_id])
+  @@map("suppliers")
+}
+
+model Purchase {
+  id               String         @id @default(uuid())
+  tenant_id        String
+  supplier_id      String
+  branch_id        String
+  purchase_date    DateTime       @db.Timestamp(6)
+  reference_number String?
+  total_amount     Decimal        @db.Decimal(12, 2)
+  status           String         @default("pending")
+  received_at      DateTime?      @db.Timestamp(6)
+  received_by      String?
+  notes            String?
+  created_at       DateTime       @default(now()) @db.Timestamp(6)
+  updated_at       DateTime       @default(now()) @db.Timestamp(6)
+  deleted_at       DateTime?      @db.Timestamp(6)
+  created_by       String?
+  items            PurchaseItem[]
+  supplier         Supplier       @relation(fields: [supplier_id], references: [id])
+
+  @@index([tenant_id, supplier_id])
+  @@index([purchase_date])
+  @@map("purchases")
+}
+
+model PurchaseItem {
+  id          String    @id @default(uuid())
+  purchase_id String
+  product_id  String
+  quantity    Int
+  unit_cost   Decimal   @db.Decimal(12, 2)
+  line_total  Decimal   @db.Decimal(12, 2)
+  created_at  DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at  DateTime? @db.Timestamp(6)
+  product     Product   @relation(fields: [product_id], references: [id])
+  purchase    Purchase  @relation(fields: [purchase_id], references: [id], onDelete: Cascade)
+
+  @@index([purchase_id])
+  @@map("purchase_items")
+}
+
+model StockTransfer {
+  id                    String              @id @default(uuid())
+  tenant_id             String
+  origin_branch_id      String
+  destination_branch_id String
+  status                StockTransferStatus @default(PENDING)
+  requested_by          String
+  approved_by           String?
+  notes                 String?
+  shipped_at            DateTime?           @db.Timestamp(6)
+  received_at           DateTime?           @db.Timestamp(6)
+  created_at            DateTime            @default(now()) @db.Timestamp(6)
+  updated_at            DateTime            @default(now()) @db.Timestamp(6)
+  deleted_at            DateTime?           @db.Timestamp(6)
+  items                 StockTransferItem[]
+  destination_branch    Branch              @relation("StockTransferDestination", fields: [destination_branch_id], references: [id])
+  origin_branch         Branch              @relation("StockTransferOrigin", fields: [origin_branch_id], references: [id])
+
+  @@index([tenant_id, status])
+  @@index([origin_branch_id])
+  @@index([destination_branch_id])
+  @@map("stock_transfers")
+}
+
+model StockTransferItem {
+  id                String        @id @default(uuid())
+  stock_transfer_id String
+  product_id        String
+  container_id      String?
+  quantity_sent     Int
+  quantity_received Int?
+  notes             String?
+  product           Product       @relation(fields: [product_id], references: [id])
+  stock_transfer    StockTransfer @relation(fields: [stock_transfer_id], references: [id], onDelete: Cascade)
+
+  @@index([stock_transfer_id])
+  @@map("stock_transfer_items")
+}
+
+model StockCountSession {
+  id           String           @id @default(uuid())
+  tenant_id    String
+  branch_id    String
+  status       StockCountStatus @default(OPEN)
+  initiated_by String
+  approved_by  String?
+  notes        String?
+  created_at   DateTime         @default(now()) @db.Timestamp(6)
+  deleted_at   DateTime?        @db.Timestamp(6)
+  submitted_at DateTime?        @db.Timestamp(6)
+  approved_at  DateTime?        @db.Timestamp(6)
+  items        StockCountItem[]
+  branch       Branch           @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, branch_id, status])
+  @@map("stock_count_sessions")
+}
+
+model StockCountItem {
+  id                  String            @id @default(uuid())
+  session_id          String
+  product_id          String
+  book_quantity       Int
+  counted_quantity    Int
+  variance            Int               @default(0)
+  variance_amount     Decimal?          @db.Decimal(12, 2)
+  notes               String?
+  adjustment_approved Boolean           @default(false)
+  approved_by         String?
+  created_at          DateTime          @default(now()) @db.Timestamp(6)
+  deleted_at          DateTime?         @db.Timestamp(6)
+  product             Product           @relation(fields: [product_id], references: [id])
+  session             StockCountSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+
+  @@index([session_id])
+  @@map("stock_count_items")
+}
+
+model Customer {
+  id                   String                     @id @default(uuid())
+  tenant_id            String
+  branch_id            String
+  customer_type        CustomerType               @default(RETAIL)
+  full_name            String
+  company_name         String?
+  phone                String
+  email                String?
+  tin                  String?
+  credit_limit         Decimal                    @default(0) @db.Decimal(12, 2)
+  current_balance      Decimal                    @default(0) @db.Decimal(12, 2)
+  loyalty_points       Int                        @default(0)
+  loyalty_tier         String?
+  status               String                     @default("active")
+  metadata             Json?
+  created_at           DateTime                   @default(now()) @db.Timestamp(6)
+  updated_at           DateTime                   @default(now()) @db.Timestamp(6)
+  deleted_at           DateTime?                  @db.Timestamp(6)
+  created_by           String?
+  container_deposits   ContainerDeposit[]
+  addresses            CustomerAddress[]
+  complaints           CustomerComplaint[]
+  container_balances   CustomerContainerBalance[]
+  ledger_entries       CustomerLedger[]
+  statements           CustomerStatement[]
+  tags                 CustomerTag[]
+  branch               Branch                     @relation(fields: [branch_id], references: [id])
+  tenant               Tenant                     @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  delivery_orders      DeliveryOrder[]
+  installment_plans    InstallmentPlan[]
+  loyalty_transactions LoyaltyTransaction[]
+  payments             Payment[]
+  refunds              Refund[]
+  reseller             Reseller?
+  sales_transactions   SalesTransaction[]
+  standing_orders      StandingOrder[]
+
+  @@index([tenant_id, branch_id])
+  @@index([phone])
+  @@index([email])
+  @@map("customers")
+}
+
+model CustomerAddress {
+  id              String          @id @default(uuid())
+  customer_id     String
+  label           String
+  address_line    String
+  barangay        String?
+  city            String?
+  province        String?
+  region          String?
+  postal_code     String?
+  latitude        Decimal?        @db.Decimal(10, 8)
+  longitude       Decimal?        @db.Decimal(11, 8)
+  is_default      Boolean         @default(false)
+  created_at      DateTime        @default(now()) @db.Timestamp(6)
+  updated_at      DateTime        @default(now()) @db.Timestamp(6)
+  deleted_at      DateTime?       @db.Timestamp(6)
+  customer        Customer        @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  delivery_orders DeliveryOrder[]
+
+  @@index([customer_id])
+  @@map("customer_addresses")
+}
+
+model CustomerTag {
+  id          String    @id @default(uuid())
+  customer_id String
+  tag_name    String
+  created_at  DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at  DateTime? @db.Timestamp(6)
+  customer    Customer  @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+
+  @@unique([customer_id, tag_name])
+  @@map("customer_tags")
+}
+
+model CustomerContainerBalance {
+  id            String    @id @default(uuid())
+  customer_id   String
+  product_id    String
+  quantity_held Int       @default(0)
+  updated_at    DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at    DateTime? @db.Timestamp(6)
+  customer      Customer  @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  product       Product   @relation(fields: [product_id], references: [id])
+
+  @@unique([customer_id, product_id])
+  @@map("customer_container_balances")
+}
+
+model CustomerComplaint {
+  id          String          @id @default(uuid())
+  customer_id String
+  subject     String
+  description String
+  status      ComplaintStatus @default(OPEN)
+  assigned_to String?
+  priority    String?         @default("medium")
+  created_at  DateTime        @default(now()) @db.Timestamp(6)
+  updated_at  DateTime        @default(now()) @db.Timestamp(6)
+  deleted_at  DateTime?       @db.Timestamp(6)
+  resolved_at DateTime?       @db.Timestamp(6)
+  resolution  String?
+  customer    Customer        @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+
+  @@index([customer_id, status])
+  @@map("customer_complaints")
+}
+
+model LoyaltyTier {
+  id                String    @id @default(uuid())
+  tenant_id         String
+  name              String
+  min_points        Int
+  points_multiplier Decimal   @default(1) @db.Decimal(3, 2)
+  benefits          Json?
+  is_active         Boolean   @default(true)
+  created_at        DateTime  @default(now()) @db.Timestamp(6)
+  updated_at        DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at        DateTime? @db.Timestamp(6)
+
+  @@unique([tenant_id, name])
+  @@map("loyalty_tiers")
+}
+
+model LoyaltyReward {
+  id           String    @id @default(uuid())
+  tenant_id    String
+  name         String
+  description  String?
+  points_cost  Int
+  reward_type  String
+  reward_value Json
+  is_active    Boolean   @default(true)
+  created_at   DateTime  @default(now()) @db.Timestamp(6)
+  updated_at   DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at   DateTime? @db.Timestamp(6)
+
+  @@index([tenant_id])
+  @@map("loyalty_rewards")
+}
+
+model LoyaltyTransaction {
+  id               String                 @id @default(uuid())
+  customer_id      String
+  transaction_type LoyaltyTransactionType
+  points           Int
+  reference_type   String?
+  reference_id     String?
+  expiry_date      DateTime?              @db.Timestamp(6)
+  notes            String?
+  created_at       DateTime               @default(now()) @db.Timestamp(6)
+  deleted_at       DateTime?              @db.Timestamp(6)
+  created_by       String?
+  customer         Customer               @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+
+  @@index([customer_id, created_at])
+  @@map("loyalty_transactions")
+}
+
+model Reseller {
+  id              String                @id @default(uuid())
+  customer_id     String                @unique
+  pricing_tier    String                @default("standard")
+  commission_rate Decimal               @default(0) @db.Decimal(5, 2)
+  credit_limit    Decimal               @default(0) @db.Decimal(12, 2)
+  status          String                @default("active")
+  approved_at     DateTime?             @db.Timestamp(6)
+  approved_by     String?
+  created_at      DateTime              @default(now()) @db.Timestamp(6)
+  updated_at      DateTime              @default(now()) @db.Timestamp(6)
+  deleted_at      DateTime?             @db.Timestamp(6)
+  consignments    ResellerConsignment[]
+  customer        Customer              @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+
+  @@map("resellers")
+}
+
+model ResellerConsignment {
+  id                 String    @id @default(uuid())
+  reseller_id        String
+  product_id         String
+  quantity_consigned Int
+  quantity_sold      Int       @default(0)
+  quantity_returned  Int       @default(0)
+  status             String    @default("open")
+  settled_at         DateTime? @db.Timestamp(6)
+  created_at         DateTime  @default(now()) @db.Timestamp(6)
+  updated_at         DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at         DateTime? @db.Timestamp(6)
+  product            Product   @relation(fields: [product_id], references: [id])
+  reseller           Reseller  @relation(fields: [reseller_id], references: [id], onDelete: Cascade)
+
+  @@index([reseller_id, status])
+  @@map("reseller_consignments")
+}
+
+model Shift {
+  id                    String             @id @default(uuid())
+  tenant_id             String
+  branch_id             String
+  cashier_id            String
+  opening_cash          Decimal            @db.Decimal(12, 2)
+  closing_cash_expected Decimal?           @db.Decimal(12, 2)
+  closing_cash_actual   Decimal?           @db.Decimal(12, 2)
+  cash_variance         Decimal?           @db.Decimal(12, 2)
+  status                ShiftStatus        @default(OPEN)
+  opened_at             DateTime           @db.Timestamp(6)
+  closed_at             DateTime?          @db.Timestamp(6)
+  x_reading             Json?
+  z_reading             Json?
+  created_at            DateTime           @default(now()) @db.Timestamp(6)
+  updated_at            DateTime           @default(now()) @db.Timestamp(6)
+  deleted_at            DateTime?          @db.Timestamp(6)
+  sales_transactions    SalesTransaction[]
+  branch                Branch             @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+  cashier               User               @relation(fields: [cashier_id], references: [id])
+
+  @@index([tenant_id, branch_id, cashier_id, status])
+  @@map("shifts")
+}
+
+model SalesTransaction {
+  id                  String                              @id @default(uuid())
+  tenant_id           String
+  branch_id           String
+  shift_id            String?
+  customer_id         String?
+  invoice_number      String
+  invoice_type        InvoiceType                         @default(OFFICIAL_RECEIPT)
+  channel             String
+  subtotal            Decimal                             @db.Decimal(12, 2)
+  discount_total      Decimal                             @default(0) @db.Decimal(12, 2)
+  tax_total           Decimal                             @default(0) @db.Decimal(12, 2)
+  grand_total         Decimal                             @db.Decimal(12, 2)
+  status              SalesTransactionStatus              @default(COMPLETED)
+  void_reason         String?
+  voided_by           String?
+  voided_at           DateTime?                           @db.Timestamp(6)
+  idempotency_key     String?                             @unique
+  notes               String?
+  created_by          String
+  created_at          DateTime                            @default(now()) @db.Timestamp(6)
+  updated_at          DateTime                            @default(now()) @db.Timestamp(6)
+  deleted_at          DateTime?                           @db.Timestamp(6)
+  delivery_orders     DeliveryOrder[]
+  payments            Payment[]
+  container_exchanges SalesTransactionContainerExchange[]
+  items               SalesTransactionItem[]
+  void_history        SalesTransactionVoid[]
+  branch              Branch                              @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+  user                User                                @relation("SalesTransactionUser", fields: [created_by], references: [id])
+  customer            Customer?                           @relation(fields: [customer_id], references: [id])
+  shift               Shift?                              @relation(fields: [shift_id], references: [id])
+  tenant              Tenant                              @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@unique([branch_id, invoice_number])
+  @@index([tenant_id, branch_id, created_at])
+  @@index([customer_id, created_at])
+  @@map("sales_transactions")
+}
+
+model SalesTransactionItem {
+  id                   String           @id @default(uuid())
+  sales_transaction_id String
+  product_id           String
+  container_id         String?
+  quantity             Int
+  unit_price           Decimal          @db.Decimal(12, 2)
+  discount_amount      Decimal          @default(0) @db.Decimal(12, 2)
+  line_total           Decimal          @db.Decimal(12, 2)
+  created_at           DateTime         @default(now()) @db.Timestamp(6)
+  deleted_at           DateTime?        @db.Timestamp(6)
+  product              Product          @relation(fields: [product_id], references: [id])
+  sales_transaction    SalesTransaction @relation(fields: [sales_transaction_id], references: [id], onDelete: Cascade)
+
+  @@index([sales_transaction_id])
+  @@map("sales_transaction_items")
+}
+
+model SalesTransactionContainerExchange {
+  id                     String           @id @default(uuid())
+  sales_transaction_id   String
+  product_id             String
+  gallon_id              String?
+  empties_received       Int              @default(0)
+  filled_issued          Int              @default(0)
+  deposit_charged_amount Decimal?         @db.Decimal(12, 2)
+  created_at             DateTime         @default(now()) @db.Timestamp(6)
+  deleted_at             DateTime?        @db.Timestamp(6)
+  gallon                 Gallon?          @relation(fields: [gallon_id], references: [id])
+  product                Product          @relation(fields: [product_id], references: [id])
+  sales_transaction      SalesTransaction @relation(fields: [sales_transaction_id], references: [id], onDelete: Cascade)
+
+  @@index([sales_transaction_id])
+  @@map("sales_transaction_container_exchanges")
+}
+
+model SalesTransactionVoid {
+  id                   String           @id @default(uuid())
+  sales_transaction_id String
+  voided_by            String
+  void_reason          String
+  voided_at            DateTime         @default(now()) @db.Timestamp(6)
+  deleted_at           DateTime?        @db.Timestamp(6)
+  approval_user_id     String?
+  approval_notes       String?
+  sales_transaction    SalesTransaction @relation(fields: [sales_transaction_id], references: [id], onDelete: Cascade)
+
+  @@index([sales_transaction_id])
+  @@map("sales_transaction_voids")
+}
+
+model Discount {
+  id                 String      @id @default(uuid())
+  tenant_id          String
+  code               String?
+  name               String
+  type               String
+  value              Decimal     @db.Decimal(12, 2)
+  requires_approval  Boolean     @default(false)
+  approval_threshold Decimal?    @db.Decimal(12, 2)
+  valid_from         DateTime?   @db.Timestamp(6)
+  valid_to           DateTime?   @db.Timestamp(6)
+  max_uses           Int?
+  used_count         Int         @default(0)
+  is_active          Boolean     @default(true)
+  created_at         DateTime    @default(now()) @db.Timestamp(6)
+  updated_at         DateTime    @default(now()) @db.Timestamp(6)
+  deleted_at         DateTime?   @db.Timestamp(6)
+  promotions         Promotion[]
+
+  @@index([tenant_id, code])
+  @@map("discounts")
+}
+
+model Promotion {
+  id             String    @id @default(uuid())
+  tenant_id      String
+  name           String
+  description    String?
+  discount_id    String?
+  start_date     DateTime  @db.Timestamp(6)
+  end_date       DateTime  @db.Timestamp(6)
+  target_segment String?
+  is_active      Boolean   @default(true)
+  created_at     DateTime  @default(now()) @db.Timestamp(6)
+  updated_at     DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at     DateTime? @db.Timestamp(6)
+  discount       Discount? @relation(fields: [discount_id], references: [id])
+
+  @@index([tenant_id, is_active])
+  @@map("promotions")
+}
+
+model DeliveryOrder {
+  id                   String              @id @default(uuid())
+  tenant_id            String
+  branch_id            String
+  customer_id          String
+  address_id           String?
+  order_type           DeliveryOrderType   @default(ONE_TIME)
+  standing_order_id    String?
+  requested_date       DateTime?           @db.Timestamp(6)
+  requested_time_slot  String?
+  status               OrderStatus         @default(PENDING)
+  assigned_rider_id    String?
+  payment_method       PaymentMethod?
+  payment_status       PaymentStatus?      @default(PENDING)
+  sales_transaction_id String?
+  failure_reason       String?
+  proof_photo_url      String?
+  proof_signature_url  String?
+  special_instructions String?
+  delivered_at         DateTime?           @db.Timestamp(6)
+  created_at           DateTime            @default(now()) @db.Timestamp(6)
+  updated_at           DateTime            @default(now()) @db.Timestamp(6)
+  deleted_at           DateTime?           @db.Timestamp(6)
+  items                DeliveryOrderItem[]
+  address              CustomerAddress?    @relation(fields: [address_id], references: [id])
+  assigned_rider       User?               @relation("AssignedRider", fields: [assigned_rider_id], references: [id])
+  branch               Branch              @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+  customer             Customer            @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  sales_transaction    SalesTransaction?   @relation(fields: [sales_transaction_id], references: [id])
+  tenant               Tenant              @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  route_stops          RouteStop[]
+
+  @@index([tenant_id, branch_id, status])
+  @@index([customer_id, created_at])
+  @@index([assigned_rider_id, status])
+  @@map("delivery_orders")
+}
+
+model DeliveryOrderItem {
+  id                String        @id @default(uuid())
+  delivery_order_id String
+  product_id        String
+  quantity          Int
+  unit_price        Decimal       @db.Decimal(12, 2)
+  created_at        DateTime      @default(now()) @db.Timestamp(6)
+  deleted_at        DateTime?     @db.Timestamp(6)
+  delivery_order    DeliveryOrder @relation(fields: [delivery_order_id], references: [id], onDelete: Cascade)
+  product           Product       @relation(fields: [product_id], references: [id])
+
+  @@index([delivery_order_id])
+  @@map("delivery_order_items")
+}
+
+model StandingOrder {
+  id                   String                 @id @default(uuid())
+  tenant_id            String
+  customer_id          String
+  frequency            StandingOrderFrequency
+  day_of_week          Int?
+  day_of_month         Int?
+  items                Json
+  next_run_date        DateTime               @db.Timestamp(6)
+  status               String                 @default("active")
+  special_instructions String?
+  created_at           DateTime               @default(now()) @db.Timestamp(6)
+  updated_at           DateTime               @default(now()) @db.Timestamp(6)
+  deleted_at           DateTime?              @db.Timestamp(6)
+  customer             Customer               @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, customer_id, status])
+  @@map("standing_orders")
+}
+
+model StandingOrderItem {
+  id                String    @id @default(uuid())
+  standing_order_id String
+  product_id        String
+  quantity          Int
+  created_at        DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at        DateTime? @db.Timestamp(6)
+  product           Product   @relation(fields: [product_id], references: [id])
+
+  @@index([standing_order_id])
+  @@map("standing_order_items")
+}
+
+model DeliveryRoute {
+  id              String      @id @default(uuid())
+  tenant_id       String
+  branch_id       String
+  route_name      String
+  rider_id        String?
+  route_date      DateTime    @db.Timestamp(6)
+  status          String      @default("planned")
+  total_stops     Int         @default(0)
+  completed_stops Int         @default(0)
+  created_at      DateTime    @default(now()) @db.Timestamp(6)
+  updated_at      DateTime    @default(now()) @db.Timestamp(6)
+  deleted_at      DateTime?   @db.Timestamp(6)
+  branch          Branch      @relation(fields: [branch_id], references: [id])
+  rider           User?       @relation(fields: [rider_id], references: [id])
+  route_stops     RouteStop[]
+
+  @@index([tenant_id, branch_id, route_date])
+  @@map("delivery_routes")
+}
+
+model RouteStop {
+  id                String        @id @default(uuid())
+  route_id          String
+  delivery_order_id String
+  sequence_number   Int
+  status            String        @default("pending")
+  estimated_arrival DateTime?     @db.Timestamp(6)
+  actual_arrival    DateTime?     @db.Timestamp(6)
+  created_at        DateTime      @default(now()) @db.Timestamp(6)
+  deleted_at        DateTime?     @db.Timestamp(6)
+  delivery_order    DeliveryOrder @relation(fields: [delivery_order_id], references: [id])
+  route             DeliveryRoute @relation(fields: [route_id], references: [id], onDelete: Cascade)
+
+  @@unique([route_id, sequence_number])
+  @@index([route_id])
+  @@map("route_stops")
+}
+
+model RiderShift {
+  id                      String    @id @default(uuid())
+  tenant_id               String
+  rider_id                String
+  branch_id               String
+  containers_loaded_out   Int       @default(0)
+  containers_returned     Int       @default(0)
+  empties_picked_up       Int       @default(0)
+  cash_collected_expected Decimal?  @db.Decimal(12, 2)
+  cash_collected_actual   Decimal?  @db.Decimal(12, 2)
+  cash_variance           Decimal?  @db.Decimal(12, 2)
+  status                  String    @default("open")
+  opened_at               DateTime  @db.Timestamp(6)
+  closed_at               DateTime? @db.Timestamp(6)
+  notes                   String?
+  created_at              DateTime  @default(now()) @db.Timestamp(6)
+  updated_at              DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at              DateTime? @db.Timestamp(6)
+  branch                  Branch    @relation(fields: [branch_id], references: [id])
+  rider                   User      @relation(fields: [rider_id], references: [id])
+
+  @@index([tenant_id, rider_id, status])
+  @@map("rider_shifts")
+}
+
+model DeliveryProof {
+  id                String    @id @default(uuid())
+  tenant_id         String
+  delivery_order_id String
+  photo_url         String?
+  signature_url     String?
+  recipient_name    String?
+  notes             String?
+  captured_at       DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at        DateTime? @db.Timestamp(6)
+
+  @@index([tenant_id])
+  @@index([delivery_order_id])
+  @@map("delivery_proofs")
+}
+
+model Payment {
+  id                     String                @id @default(uuid())
+  tenant_id              String
+  sales_transaction_id   String?
+  customer_id            String?
+  payment_method         PaymentMethod
+  amount                 Decimal               @db.Decimal(12, 2)
+  reference_number       String?
+  status                 PaymentStatus         @default(PENDING)
+  collected_by           String?
+  notes                  String?
+  paid_at                DateTime?             @db.Timestamp(6)
+  confirmed_at           DateTime?             @db.Timestamp(6)
+  reconciled_at          DateTime?             @db.Timestamp(6)
+  created_at             DateTime              @default(now()) @db.Timestamp(6)
+  updated_at             DateTime              @default(now()) @db.Timestamp(6)
+  deleted_at             DateTime?             @db.Timestamp(6)
+  collector              User?                 @relation("PaymentCollectedBy", fields: [collected_by], references: [id])
+  customer               Customer?             @relation(fields: [customer_id], references: [id])
+  sales_transaction      SalesTransaction?     @relation(fields: [sales_transaction_id], references: [id])
+  reconciliation_entries ReconciliationEntry[]
+
+  @@index([tenant_id, customer_id])
+  @@index([sales_transaction_id])
+  @@index([payment_method, status])
+  @@map("payments")
+}
+
+model CustomerStatement {
+  id              String    @id @default(uuid())
+  tenant_id       String
+  customer_id     String
+  period_start    DateTime  @db.Timestamp(6)
+  period_end      DateTime  @db.Timestamp(6)
+  opening_balance Decimal   @db.Decimal(12, 2)
+  charges_total   Decimal   @db.Decimal(12, 2)
+  payments_total  Decimal   @db.Decimal(12, 2)
+  closing_balance Decimal   @db.Decimal(12, 2)
+  generated_at    DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at      DateTime? @db.Timestamp(6)
+  generated_by    String?
+  customer        Customer  @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+
+  @@index([customer_id, period_start, period_end])
+  @@map("customer_statements")
+}
+
+model CustomerLedger {
+  id              String    @id @default(uuid())
+  tenant_id       String
+  customer_id     String
+  entry_type      String
+  amount          Decimal   @db.Decimal(12, 2)
+  running_balance Decimal   @db.Decimal(12, 2)
+  reference_type  String?
+  reference_id    String?
+  due_date        DateTime? @db.Timestamp(6)
+  is_paid         Boolean   @default(false)
+  paid_at         DateTime? @db.Timestamp(6)
+  notes           String?
+  created_at      DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at      DateTime? @db.Timestamp(6)
+  created_by      String?
+  branch_id       String?
+  branch          Branch?   @relation(fields: [branch_id], references: [id])
+  customer        Customer  @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+
+  @@index([customer_id, created_at])
+  @@index([due_date, is_paid])
+  @@map("customer_ledger")
+}
+
+model InstallmentPlan {
+  id                     String    @id @default(uuid())
+  tenant_id              String
+  customer_id            String
+  total_amount           Decimal   @db.Decimal(12, 2)
+  number_of_installments Int
+  installment_amount     Decimal   @db.Decimal(12, 2)
+  interval_days          Int       @default(30)
+  start_date             DateTime  @db.Timestamp(6)
+  status                 String    @default("active")
+  created_at             DateTime  @default(now()) @db.Timestamp(6)
+  updated_at             DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at             DateTime? @db.Timestamp(6)
+  created_by             String?
+  branch_id              String?
+  branch                 Branch?   @relation(fields: [branch_id], references: [id])
+  customer               Customer  @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+
+  @@index([customer_id, status])
+  @@map("installment_plans")
+}
+
+model Installment {
+  id                  String    @id @default(uuid())
+  tenant_id           String
+  installment_plan_id String
+  customer_id         String
+  sequence_number     Int
+  amount_due          Decimal   @db.Decimal(12, 2)
+  due_date            DateTime  @db.Timestamp(6)
+  is_paid             Boolean   @default(false)
+  paid_at             DateTime? @db.Timestamp(6)
+  created_at          DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at          DateTime? @db.Timestamp(6)
+
+  @@index([tenant_id])
+  @@index([installment_plan_id, due_date, is_paid])
+  @@map("installments")
+}
+
+model ContainerDeposit {
+  id                  String    @id @default(uuid())
+  tenant_id           String
+  customer_id         String
+  product_id          String
+  gallon_id           String?
+  quantity            Int
+  unit_deposit_amount Decimal   @db.Decimal(12, 2)
+  total_amount        Decimal   @db.Decimal(12, 2)
+  status              String    @default("held")
+  refund_amount       Decimal?  @db.Decimal(12, 2)
+  refunded_at         DateTime? @db.Timestamp(6)
+  refunded_by         String?
+  created_at          DateTime  @default(now()) @db.Timestamp(6)
+  updated_at          DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at          DateTime? @db.Timestamp(6)
+  customer            Customer  @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  gallon              Gallon?   @relation(fields: [gallon_id], references: [id])
+  product             Product   @relation(fields: [product_id], references: [id])
+
+  @@index([customer_id, status])
+  @@map("container_deposits")
+}
+
+model Refund {
+  id               String        @id @default(uuid())
+  tenant_id        String
+  customer_id      String
+  refund_type      String
+  amount           Decimal       @db.Decimal(12, 2)
+  payment_method   PaymentMethod
+  reference_number String?
+  reason           String?
+  approved_by      String?
+  refunded_at      DateTime      @db.Timestamp(6)
+  created_at       DateTime      @default(now()) @db.Timestamp(6)
+  deleted_at       DateTime?     @db.Timestamp(6)
+  created_by       String?
+  customer         Customer      @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, customer_id])
+  @@map("refunds")
+}
+
+model CashTransaction {
+  id               String    @id @default(uuid())
+  tenant_id        String
+  branch_id        String
+  transaction_type String
+  amount           Decimal   @db.Decimal(12, 2)
+  reference_type   String?
+  reference_id     String?
+  notes            String?
+  recorded_by      String
+  recorded_at      DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at       DateTime? @db.Timestamp(6)
+
+  @@index([tenant_id, branch_id, recorded_at])
+  @@map("cash_transactions")
+}
+
+model Expense {
+  id           String    @id @default(uuid())
+  tenant_id    String
+  branch_id    String
+  category     String
+  amount       Decimal   @db.Decimal(12, 2)
+  description  String
+  receipt_url  String?
+  approved_by  String?
+  expense_date DateTime  @db.Timestamp(6)
+  created_at   DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at   DateTime? @db.Timestamp(6)
+  created_by   String?
+
+  @@index([tenant_id, branch_id, expense_date])
+  @@map("expenses")
+}
+
+model BankStatement {
+  id                     String                @id @default(uuid())
+  tenant_id              String
+  bank_name              String
+  account_number         String?
+  statement_date         DateTime              @db.Timestamp(6)
+  opening_balance        Decimal               @db.Decimal(12, 2)
+  closing_balance        Decimal               @db.Decimal(12, 2)
+  total_credits          Decimal               @db.Decimal(12, 2)
+  total_debits           Decimal               @db.Decimal(12, 2)
+  file_url               String?
+  import_status          String                @default("imported")
+  created_at             DateTime              @default(now()) @db.Timestamp(6)
+  deleted_at             DateTime?             @db.Timestamp(6)
+  imported_by            String?
+  reconciliation_entries ReconciliationEntry[]
+
+  @@index([tenant_id, statement_date])
+  @@map("bank_statements")
+}
+
+model ReconciliationEntry {
+  id                String               @id @default(uuid())
+  tenant_id         String
+  bank_statement_id String
+  payment_id        String?
+  system_amount     Decimal              @db.Decimal(12, 2)
+  statement_amount  Decimal              @db.Decimal(12, 2)
+  difference_amount Decimal              @db.Decimal(12, 2)
+  status            ReconciliationStatus @default(UNRECONCILED)
+  matched_at        DateTime?            @db.Timestamp(6)
+  notes             String?
+  created_at        DateTime             @default(now()) @db.Timestamp(6)
+  deleted_at        DateTime?            @db.Timestamp(6)
+  bank_statement    BankStatement        @relation(fields: [bank_statement_id], references: [id], onDelete: Cascade)
+  payment           Payment?             @relation(fields: [payment_id], references: [id])
+
+  @@index([bank_statement_id, status])
+  @@map("reconciliation_entries")
+}
+
+model ContainerMovement {
+  id               String       @id @default(uuid())
+  tenant_id        String
+  gallon_id        String
+  branch_id        String
+  movement_type    MovementType
+  from_holder_type String?
+  from_holder_id   String?
+  to_holder_type   String?
+  to_holder_id     String?
+  reference_type   String?
+  reference_id     String?
+  changed_by       String?
+  notes            String?
+  created_at       DateTime     @default(now()) @db.Timestamp(6)
+  deleted_at       DateTime?    @db.Timestamp(6)
+  branch           Branch       @relation(fields: [branch_id], references: [id])
+  user             User?        @relation("ContainerMovementUser", fields: [changed_by], references: [id])
+  gallon           Gallon       @relation(fields: [gallon_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, gallon_id, created_at])
+  @@index([branch_id, created_at])
+  @@map("container_movements")
+}
+
+model Equipment {
+  id               String           @id @default(uuid())
+  tenant_id        String
+  branch_id        String
+  name             String
+  type             EquipmentType
+  serial_number    String?
+  model            String?
+  manufacturer     String?
+  installed_at     DateTime         @db.Timestamp(6)
+  warranty_expires DateTime?        @db.Timestamp(6)
+  status           String           @default("active")
+  created_at       DateTime         @default(now()) @db.Timestamp(6)
+  updated_at       DateTime         @default(now()) @db.Timestamp(6)
+  deleted_at       DateTime?        @db.Timestamp(6)
+  branch           Branch           @relation(fields: [branch_id], references: [id])
+  maintenance_logs MaintenanceLog[]
+
+  @@index([tenant_id, branch_id, type])
+  @@map("equipment")
+}
+
+model MaintenanceLog {
+  id               String          @id @default(uuid())
+  tenant_id        String
+  equipment_id     String
+  maintenance_type MaintenanceType
+  performed_by     String
+  performed_at     DateTime        @default(now()) @db.Timestamp(6)
+  deleted_at       DateTime?       @db.Timestamp(6)
+  next_due_at      DateTime?       @db.Timestamp(6)
+  cost             Decimal?        @db.Decimal(10, 2)
+  notes            String?
+  created_at       DateTime        @default(now()) @db.Timestamp(6)
+  equipment        Equipment       @relation(fields: [equipment_id], references: [id], onDelete: Cascade)
+  maintainer       User            @relation(fields: [performed_by], references: [id])
+
+  @@index([equipment_id, performed_at])
+  @@map("maintenance_logs")
+}
+
+model Notification {
+  id            String              @id @default(uuid())
+  tenant_id     String
+  user_id       String?
+  customer_id   String?
+  channel       NotificationChannel
+  template_code String?
+  payload       Json
+  status        NotificationStatus  @default(QUEUED)
+  retry_count   Int                 @default(0)
+  max_retries   Int                 @default(3)
+  sent_at       DateTime?           @db.Timestamp(6)
+  failed_at     DateTime?           @db.Timestamp(6)
+  error_message String?
+  created_at    DateTime            @default(now()) @db.Timestamp(6)
+  deleted_at    DateTime?           @db.Timestamp(6)
+  tenant        Tenant              @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, status, created_at])
+  @@map("notifications")
+}
+
+model NotificationTemplate {
+  id            String              @id @default(uuid())
+  tenant_id     String
+  code          String
+  channel       NotificationChannel
+  subject       String?
+  body_template String
+  variables     Json?
+  is_active     Boolean             @default(true)
+  created_at    DateTime            @default(now()) @db.Timestamp(6)
+  updated_at    DateTime            @default(now()) @db.Timestamp(6)
+  deleted_at    DateTime?           @db.Timestamp(6)
+
+  @@unique([tenant_id, code, channel])
+  @@map("notification_templates")
+}
+
+model NotificationPreference {
+  id            String              @id @default(uuid())
+  tenant_id     String
+  user_id       String?
+  customer_id   String?
+  channel       NotificationChannel
+  template_code String
+  is_enabled    Boolean             @default(true)
+  created_at    DateTime            @default(now()) @db.Timestamp(6)
+  updated_at    DateTime            @default(now()) @db.Timestamp(6)
+  deleted_at    DateTime?           @db.Timestamp(6)
+
+  @@unique([user_id, customer_id, template_code, channel])
+  @@index([tenant_id])
+  @@map("notification_preferences")
+}
+
+model ReportSchedule {
+  id          String    @id @default(uuid())
+  tenant_id   String
+  report_type String
+  frequency   String
+  recipients  Json
+  format      String    @default("pdf")
+  filters     Json?
+  is_active   Boolean   @default(true)
+  last_run_at DateTime? @db.Timestamp(6)
+  next_run_at DateTime? @db.Timestamp(6)
+  created_at  DateTime  @default(now()) @db.Timestamp(6)
+  updated_at  DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at  DateTime? @db.Timestamp(6)
+  created_by  String?
+
+  @@index([tenant_id, is_active])
+  @@map("report_schedules")
+}
+
+model ExportJob {
+  id            String    @id @default(uuid())
+  tenant_id     String
+  report_type   String
+  format        String
+  filters       Json
+  file_url      String?
+  status        String    @default("pending")
+  started_at    DateTime? @db.Timestamp(6)
+  completed_at  DateTime? @db.Timestamp(6)
+  error_message String?
+  requested_by  String
+  created_at    DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at    DateTime? @db.Timestamp(6)
+
+  @@index([tenant_id, status])
+  @@map("export_jobs")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  OWNER
+  BRANCH_MANAGER
+  CASHIER
+  INVENTORY_STAFF
+  RIDER
+  DISPATCHER
+  ACCOUNTANT
+  RESELLER
+  CUSTOMER
+  TECHNICIAN
+}
+
+enum CustomerType {
+  RETAIL
+  RESELLER
+  CORPORATE
+}
+
+enum OrderStatus {
+  PENDING
+  ASSIGNED
+  OUT_FOR_DELIVERY
+  DELIVERED
+  FAILED
+  RETURNED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  GCASH
+  MAYA
+  BANK_TRANSFER
+  CARD
+  CHECK
+  CREDIT
+}
+
+enum PaymentStatus {
+  PENDING
+  CONFIRMED
+  RECONCILED
+  DISPUTED
+  FAILED
+}
+
+enum ContainerStatus {
+  IN_STOCK
+  WITH_CUSTOMER
+  WITH_RIDER
+  WITH_RESELLER
+  DAMAGED
+  LOST
+  RETIRED
+  CLEANING
+  INSPECTION
+  FILLED
+}
+
+enum ProductType {
+  FINISHED_GOOD
+  RAW_MATERIAL
+  CONTAINER
+  ACCESSORY
+  SERVICE
+}
+
+enum MovementType {
+  SALE
+  PURCHASE
+  PRODUCTION
+  TRANSFER_IN
+  TRANSFER_OUT
+  ADJUSTMENT
+  WRITE_OFF
+  RETURN
+  CLEANING
+  FILLING
+  INSPECTION
+}
+
+enum ShiftStatus {
+  OPEN
+  CLOSED
+}
+
+enum StockTransferStatus {
+  PENDING
+  APPROVED
+  IN_TRANSIT
+  RECEIVED
+  DISCREPANCY
+  CANCELLED
+}
+
+enum StockCountStatus {
+  OPEN
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum NotificationChannel {
+  SMS
+  EMAIL
+  PUSH
+  IN_APP
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  FAILED
+  RETRYING
+  CANCELLED
+}
+
+enum InvoiceType {
+  OFFICIAL_RECEIPT
+  SALES_INVOICE
+  TAX_INVOICE
+}
+
+enum SalesTransactionStatus {
+  COMPLETED
+  VOID
+  REFUNDED
+  HOLD
+}
+
+enum DeliveryOrderType {
+  ONE_TIME
+  STANDING
+}
+
+enum LoyaltyTransactionType {
+  EARN
+  REDEEM
+  EXPIRE
+  ADJUST
+}
+
+enum StandingOrderFrequency {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+}
+
+enum EquipmentType {
+  RO_MEMBRANE
+  SEDIMENT_FILTER
+  CARBON_FILTER
+  UV_LAMP
+  DISPENSER_MACHINE
+  PUMP
+  OTHER
+}
+
+enum MaintenanceType {
+  REPLACEMENT
+  REPAIR
+  CLEANING
+  INSPECTION
+  CALIBRATION
+}
+
+enum ComplaintStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum ReconciliationStatus {
+  UNRECONCILED
+  RECONCILED
+  DISCREPANCY
+}
