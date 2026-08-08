@@ -6,6 +6,8 @@ import { loginSchema, registerSchema, refreshTokenSchema, logoutSchema } from '.
 import { logger } from '../../utils/logger'
 import { AppError } from '../../middleware/errorHandler'
 import { successResponse, errorResponse } from '../../utils/response'
+import bcrypt from 'bcrypt'
+import { config } from '../../config'
 
 export const authController = {
   async login(req: Request, res: Response, next: NextFunction) {
@@ -133,6 +135,81 @@ export const authController = {
       }
 
       return res.status(200).json(successResponse(authUser))
+    } catch (error) {
+      next(error)
+    }
+  },
+
+  async listStaffAccounts(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.tenantId) throw new AppError(401, 'Authentication required')
+
+      const users = await prisma.user.findMany({
+        where: {
+          tenant_id: req.tenantId,
+          deleted_at: null,
+          user_roles: { some: { is_active: true, role: { code: { in: ['cashier', 'rider'] } } } },
+        },
+        include: { user_roles: { where: { is_active: true }, include: { role: true } } },
+        orderBy: { full_name: 'asc' },
+      })
+
+      return res.status(200).json(successResponse(users.map((user: any) => ({
+        id: user.id,
+        fullName: user.full_name,
+        email: user.email,
+        role: user.user_roles.find((assignment: any) => ['cashier', 'rider'].includes(assignment.role.code))?.role.code.toUpperCase(),
+        status: user.status,
+      }))))
+    } catch (error) {
+      next(error)
+    }
+  },
+
+  async updateStaffAccount(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.tenantId) throw new AppError(401, 'Authentication required')
+      const { userId } = req.validatedParams as { userId: string }
+      const { fullName, email, password } = req.validatedBody as {
+        fullName: string
+        email: string
+        password?: string
+      }
+
+      const staff = await prisma.user.findFirst({
+        where: {
+          id: userId,
+          tenant_id: req.tenantId,
+          deleted_at: null,
+          user_roles: { some: { is_active: true, role: { code: { in: ['cashier', 'rider'] } } } },
+        },
+      })
+      if (!staff) throw new AppError(404, 'Cashier or rider account not found')
+
+      const emailOwner = await prisma.user.findFirst({
+        where: { email, id: { not: userId }, deleted_at: null },
+      })
+      if (emailOwner) throw new AppError(409, 'Email address is already in use')
+
+      const data: Record<string, unknown> = {
+        full_name: fullName,
+        email,
+        updated_at: new Date(),
+      }
+      if (password) data.password_hash = await bcrypt.hash(password, config.bcryptRounds)
+
+      const updated = await prisma.$transaction(async (tx: any) => {
+        const user = await tx.user.update({ where: { id: userId }, data })
+        if (password) await tx.refreshToken.deleteMany({ where: { user_id: userId } })
+        return user
+      })
+
+      logger.info('Owner updated staff account', { ownerId: req.userId, staffId: userId })
+      return res.status(200).json(successResponse({
+        id: updated.id,
+        fullName: updated.full_name,
+        email: updated.email,
+      }))
     } catch (error) {
       next(error)
     }

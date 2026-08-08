@@ -61,7 +61,12 @@ export const useAuthStore = create<AuthStore>()(
 
       logout: async () => {
         try {
-          await apiClient.post(API_ENDPOINTS.AUTH.LOGOUT)
+          const storedRefreshToken = localStorage.getItem('refresh_token')
+          if (storedRefreshToken) {
+            await apiClient.post(API_ENDPOINTS.AUTH.LOGOUT, {
+              refreshToken: storedRefreshToken,
+            })
+          }
         } catch {
           // Continue with logout even if API call fails
         }

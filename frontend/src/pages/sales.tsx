@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { PageLayout } from '@/layouts/page-layout'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { SearchBar } from '@/components/ui/search-bar'
 import { DataTable } from '@/components/ui/data-table'
 import { SkeletonTable } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
@@ -13,8 +12,11 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
 import { salesService } from '@/services/sales.service'
+import { customerService } from '@/services/customer.service'
+import { productService } from '@/services/product.service'
+import { useAuthContext } from '@/contexts/auth-context'
 import type { Sale, CreateSaleRequest, SaleChannel, PaymentMethod } from '@/types/sales'
-import { FiPlus, FiTrash2 } from 'react-icons/fi'
+import { FiTrash2 } from 'react-icons/fi'
 
 const SALE_CHANNELS: { value: SaleChannel; label: string }[] = [
   { value: 'IN_STORE', label: 'Walk-in' },
@@ -25,6 +27,8 @@ const SALE_CHANNELS: { value: SaleChannel; label: string }[] = [
 export function SalesPage() {
   const queryClient = useQueryClient()
   const { addToast } = useToast()
+  const { user } = useAuthContext()
+  const canCreateSale = user?.role === 'cashier'
   const [searchQuery, setSearchQuery] = useState('')
   const [page, setPage] = useState(1)
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -33,11 +37,25 @@ export function SalesPage() {
   const [formData, setFormData] = useState({
     channel: 'IN_STORE' as SaleChannel,
     customerId: '',
-    items: [{ productId: '', productName: '', quantity: 1, unitPrice: 0 }] as CreateSaleRequest['items'],
-    payments: [{ amount: 0, method: 'CASH' as PaymentMethod }] as CreateSaleRequest['payments'],
+    customerSearch: '',
+    items: [{ productId: '', productName: '', quantity: '', unitPrice: '' }],
+    payments: [{ amount: '', method: 'CASH' as PaymentMethod }],
     notes: '',
   })
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false)
+
+  const { data: customerSearchData } = useQuery({
+    queryKey: ['customers', 'search', formData.customerSearch],
+    queryFn: () => customerService.list({ search: formData.customerSearch, page: 1, limit: 5 }),
+    enabled: formData.channel === 'DELIVERY' && formData.customerSearch.length >= 2,
+  })
+
+  const { data: productOptions } = useQuery({
+    queryKey: ['products', 'sale-options'],
+    queryFn: () => productService.list({ page: 1, limit: 100, isActive: true }),
+    enabled: canCreateSale,
+  })
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['sales', searchQuery, page],
@@ -79,29 +97,27 @@ export function SalesPage() {
     setFormData({
       channel: 'IN_STORE',
       customerId: '',
-      items: [{ productId: '', productName: '', quantity: 1, unitPrice: 0 }],
-      payments: [{ amount: 0, method: 'CASH' }],
+      customerSearch: '',
+      items: [{ productId: '', productName: '', quantity: '', unitPrice: '' }],
+      payments: [{ amount: '', method: 'CASH' }],
       notes: '',
     })
     setFormErrors({})
   }
 
-  const openCreateForm = () => {
-    resetForm()
-    setIsFormOpen(true)
-  }
-
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {}
     if (formData.items.length === 0) errors.items = 'At least one item is required'
-    if (formData.payments.length === 0 || formData.payments[0].amount <= 0) errors.payment = 'Payment amount is required'
+    if (formData.items.some((item) => !item.productId || Number(item.quantity) <= 0)) errors.items = 'Select a product and enter a quantity for every line'
+    if (formData.payments.length === 0 || Number(formData.payments[0].amount) <= 0) errors.payment = 'Payment amount is required'
+    if (formData.channel === 'DELIVERY' && !formData.customerId) errors.customer = 'Please select an existing customer'
     setFormErrors(errors)
     return Object.keys(errors).length === 0
   }
 
   const calculateTotals = () => {
-    const subtotal = formData.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0)
-    const totalPaid = formData.payments.reduce((sum, p) => sum + p.amount, 0)
+    const subtotal = formData.items.reduce((sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0), 0)
+    const totalPaid = formData.payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
     const change = totalPaid - subtotal
     return { subtotal, totalPaid, change }
   }
@@ -119,11 +135,11 @@ export function SalesPage() {
       items: formData.items.map((item) => ({
         productId: item.productId,
         productName: item.productName,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
+        quantity: Number(item.quantity) || 0,
+        unitPrice: Number(item.unitPrice) || 0,
       })),
       payments: formData.payments.map((p) => ({
-        amount: p.amount,
+        amount: Number(p.amount) || 0,
         method: p.method,
       })),
       notes: formData.notes || null,
@@ -133,7 +149,7 @@ export function SalesPage() {
   const addItem = () => {
     setFormData({
       ...formData,
-      items: [...formData.items, { productId: '', productName: '', quantity: 1, unitPrice: 0 }],
+      items: [...formData.items, { productId: '', productName: '', quantity: '', unitPrice: '' }],
     })
   }
 
@@ -157,11 +173,13 @@ export function SalesPage() {
 
   const columns = [
     { key: 'invoiceNumber', header: 'Invoice' },
-    { key: 'channel', header: 'Channel', render: (item: Sale) => <Badge variant="info">{item.channel}</Badge> },
+    { key: 'customerName', header: 'Customer' },
+    { key: 'cashierName', header: 'Cashier' },
+    { key: 'channel', header: 'Sale Type', render: (item: Sale) => <Badge variant="info">{item.channel === 'IN_STORE' ? 'Walk-in' : 'Delivery'}</Badge> },
     { key: 'grandTotal', header: 'Total', render: (item: Sale) => `₱${item.grandTotal.toFixed(2)}` },
     { key: 'status', header: 'Status', render: (item: Sale) => <Badge variant={item.status === 'COMPLETED' ? 'success' : 'warning'}>{item.status}</Badge> },
     { key: 'createdAt', header: 'Date', render: (item: Sale) => new Date(item.createdAt).toLocaleDateString() },
-    {
+    ...(canCreateSale ? [{
       key: 'actions',
       header: 'Actions',
       render: (item: Sale) => (
@@ -171,7 +189,7 @@ export function SalesPage() {
           </Button>
         </div>
       ),
-    },
+    }] : []),
   ]
 
   const pagination = data?.meta
@@ -232,27 +250,12 @@ export function SalesPage() {
         { label: 'Sales' },
       ]}
     >
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <SearchBar
-          value={searchQuery}
-          onChange={setSearchQuery}
-          placeholder="Search sales..."
-        />
-        <Button onClick={openCreateForm}>
-          <FiPlus className="w-4 h-4 mr-2" />
-          New Sale
-        </Button>
-      </div>
-
       {sales.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <p className="text-gray-500 dark:text-gray-400">
               {searchQuery ? 'No sales match your search' : 'No sales recorded yet'}
             </p>
-            <Button variant="outline" className="mt-4" onClick={openCreateForm}>
-              Record a sale
-            </Button>
           </CardContent>
         </Card>
       ) : (
@@ -285,72 +288,87 @@ export function SalesPage() {
               <Select
                 options={SALE_CHANNELS.map((c) => ({ value: c.value, label: c.label }))}
                 value={formData.channel}
-                onChange={(e) => setFormData({ ...formData, channel: e.target.value as SaleChannel })}
+                onChange={(e) => {
+                  const channel = e.target.value as SaleChannel
+                  const items = formData.items.map((item) => {
+                    const product = productOptions?.data.find((option) => option.id === item.productId)
+                    if (!product) return item
+                    const price = Number(product.basePrice) +
+                      (channel === 'DELIVERY' && product.sku === 'WATER-5G-REFILL' ? 5 : 0)
+                    return { ...item, unitPrice: String(price) }
+                  })
+                  setFormData({ ...formData, channel, items })
+                }}
               />
             </div>
             {formData.channel === 'DELIVERY' && (
-              <div>
+              <div className="relative">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Customer Name</label>
                 <Input
-                  value={formData.customerId}
-                  onChange={(e) => setFormData({ ...formData, customerId: e.target.value })}
-                  placeholder="Customer ID or name"
+                  value={formData.customerSearch || formData.customerId}
+                  onChange={(e) => {
+                    setFormData({ ...formData, customerSearch: e.target.value, customerId: '' })
+                    setShowCustomerDropdown(true)
+                  }}
+                  onFocus={() => setShowCustomerDropdown(true)}
+                  onBlur={() => setTimeout(() => setShowCustomerDropdown(false), 200)}
+                  placeholder="Search existing customer..."
                 />
+                {showCustomerDropdown && customerSearchData?.data?.length ? (
+                  <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-48 overflow-auto">
+                    {customerSearchData.data.map((customer) => (
+                      <div
+                        key={customer.id}
+                        className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer text-sm"
+                        onMouseDown={() => {
+                          setFormData({ ...formData, customerId: customer.id, customerSearch: customer.fullName })
+                          setShowCustomerDropdown(false)
+                        }}
+                      >
+                        <p className="font-medium text-gray-900 dark:text-white">{customer.fullName}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{customer.phone}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             )}
           </div>
-
-          {formData.channel === 'DELIVERY' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Phone</label>
-                <Input
-                  value={formData.items[0]?.productName ?? ''}
-                  onChange={(e) => updateItem(0, 'productName', e.target.value)}
-                  placeholder="Phone number"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Address</label>
-                <Input
-                  value={formData.items[0]?.productId ?? ''}
-                  onChange={(e) => updateItem(0, 'productId', e.target.value)}
-                  placeholder="Address"
-                />
-              </div>
-            </div>
-          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Items</label>
             {formData.items.map((item, index) => (
               <div key={index} className="grid grid-cols-12 gap-2 mb-2">
                 <div className="col-span-4">
-                  <Input
-                    value={item.productName}
-                    onChange={(e) => updateItem(index, 'productName', e.target.value)}
-                    placeholder="Product name"
+                  <Select
+                    options={(productOptions?.data ?? []).map((product) => ({ value: product.id, label: `${product.name} — ₱${Number(product.basePrice).toFixed(2)}` }))}
+                    value={item.productId}
+                    onChange={(event) => {
+                      const product = productOptions?.data.find((option) => option.id === event.target.value)
+                      if (!product) return
+                      const newItems = [...formData.items]
+                      const deliveryPrice = formData.channel === 'DELIVERY' && product.sku === 'WATER-5G-REFILL'
+                        ? Number(product.basePrice) + 5
+                        : Number(product.basePrice)
+                      newItems[index] = { ...newItems[index], productId: product.id, productName: product.name, unitPrice: String(deliveryPrice) }
+                      setFormData({ ...formData, items: newItems })
+                    }}
+                    placeholder="Select product"
                   />
                 </div>
                 <div className="col-span-2">
                   <Input
                     type="number"
                     value={item.quantity}
-                    onChange={(e) => updateItem(index, 'quantity', Number(e.target.value))}
+                    onChange={(e) => updateItem(index, 'quantity', e.target.value)}
                     placeholder="Qty"
                   />
                 </div>
                 <div className="col-span-3">
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={item.unitPrice}
-                    onChange={(e) => updateItem(index, 'unitPrice', Number(e.target.value))}
-                    placeholder="Price"
-                  />
+                  <div className="h-10 flex items-center px-3 rounded-lg bg-gray-50 dark:bg-gray-700 text-sm">₱{Number(item.unitPrice || 0).toFixed(2)} each</div>
                 </div>
                 <div className="col-span-2 flex items-center">
-                  <span className="text-sm font-medium">₱{(item.quantity * item.unitPrice).toFixed(2)}</span>
+                  <span className="text-sm font-medium">₱{(Number(item.quantity) * Number(item.unitPrice)).toFixed(2)}</span>
                 </div>
                 <div className="col-span-1">
                   <Button variant="ghost" size="sm" onClick={() => removeItem(index)} disabled={formData.items.length === 1}>
@@ -370,14 +388,14 @@ export function SalesPage() {
               <Input
                 type="number"
                 step="0.01"
-                value={formData.payments[0]?.amount ?? 0}
+                value={formData.payments[0]?.amount ?? ''}
                 onChange={(e) =>
                   setFormData({
                     ...formData,
-                    payments: [{ amount: Number(e.target.value), method: 'CASH' }],
+                    payments: [{ amount: e.target.value, method: 'CASH' }],
                   })
                 }
-                placeholder="0.00"
+                placeholder="Enter amount paid"
               />
             </div>
             <div>

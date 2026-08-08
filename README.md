@@ -1,4 +1,4 @@
-# Water Station Management System (WSMS)
+# Z's Purified Drinking Water Management System
 
 A modern, production-ready management platform for water refilling stations, covering point-of-sale, delivery logistics, inventory/container tracking, customer relationship management, billing/collections, and reporting.
 

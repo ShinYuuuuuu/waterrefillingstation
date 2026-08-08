@@ -72,7 +72,7 @@ export const productController = {
 
   /**
    * PUT /products/:productId
-   * Update an existing product.
+   * Update product details.
    */
   async update(req: Request, res: Response, next: NextFunction) {
     try {
@@ -81,6 +81,54 @@ export const productController = {
       const body = req.validatedBody as UpdateProductRequest
 
       const result = await productService.updateProduct(productId, body, ctx)
+      return res.status(httpStatus.OK).json(successResponse(result))
+    } catch (error) {
+      next(error)
+    }
+  },
+
+  /**
+   * POST /products/:productId/archive
+   * Archive a product (set is_active = false).
+   */
+  async archive(req: Request, res: Response, next: NextFunction) {
+    try {
+      const ctx = buildContext(req)
+      const { productId } = req.validatedParams as { productId: string }
+
+      const result = await productService.archiveProduct(productId, ctx)
+      return res.status(httpStatus.OK).json(successResponse(result))
+    } catch (error) {
+      next(error)
+    }
+  },
+
+  /**
+   * POST /products/:productId/reactivate
+   * Reactivate an archived product (set is_active = true).
+   */
+  async reactivate(req: Request, res: Response, next: NextFunction) {
+    try {
+      const ctx = buildContext(req)
+      const { productId } = req.validatedParams as { productId: string }
+
+      const result = await productService.reactivateProduct(productId, ctx)
+      return res.status(httpStatus.OK).json(successResponse(result))
+    } catch (error) {
+      next(error)
+    }
+  },
+
+  /**
+   * GET /products/:productId/can-delete
+   * Check whether a product can be safely hard-deleted.
+   */
+  async canDelete(req: Request, res: Response, next: NextFunction) {
+    try {
+      const ctx = buildContext(req)
+      const { productId } = req.validatedParams as { productId: string }
+
+      const result = await productService.canDeleteProduct(productId, ctx)
       return res.status(httpStatus.OK).json(successResponse(result))
     } catch (error) {
       next(error)

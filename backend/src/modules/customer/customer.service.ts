@@ -9,6 +9,8 @@ import {
   CustomerResponse,
   CreateCustomerRequest,
   UpdateCustomerRequest,
+  CustomerPurchaseSummary,
+  CustomerSalesHistoryResponse,
 } from './customer.types'
 import { CustomerMapper } from './customer.mapper'
 import { CustomerRepository, customerRepository } from './customer.repository'
@@ -51,10 +53,10 @@ export class CustomerService {
       throw new AppError(httpStatus.BAD_REQUEST, 'A branch context is required to create a customer')
     }
 
-    // --- Duplicate phone / email check within tenant ---
-    const existing = await this.repository.findDuplicate(data.phone, data.email ?? null, ctx)
+    // --- Duplicate phone / email / name check within tenant ---
+    const existing = await this.repository.findDuplicate(data.phone, data.email ?? null, data.fullName, ctx)
     if (existing) {
-      throw new AppError(httpStatus.CONFLICT, 'A customer with this phone number or email already exists')
+      throw new AppError(httpStatus.CONFLICT, 'A customer with this phone number, email, or name already exists')
     }
 
     // --- Create the customer record ---
@@ -123,6 +125,129 @@ export class CustomerService {
   }
 
   // -----------------------------------------------------------------------
+  // PURCHASE SUMMARY
+  // -----------------------------------------------------------------------
+
+  /**
+   * Get purchase summary for a single customer derived from SalesTransaction data.
+   *
+   * Business rules:
+   *  - Only COMPLETED sales are counted.
+   *  - Gallons = sum of item quantities across all completed sales.
+   *  - Total spent = sum of grand_total across all completed sales.
+   *  - Last purchase = most recent created_at of a completed sale.
+   */
+  async getCustomerPurchaseSummary(id: string, ctx: CustomerContext): Promise<CustomerPurchaseSummary> {
+    const customer = await this.repository.findUnique(id, ctx)
+    if (!customer) {
+      throw new NotFoundError('Customer')
+    }
+
+    const summary = await prisma.salesTransaction.aggregate({
+      where: {
+        tenant_id: ctx.tenantId,
+        deleted_at: null,
+        customer_id: id,
+        status: 'COMPLETED',
+        ...(ctx.branchId ? { branch_id: ctx.branchId } : {}),
+      },
+      _count: { id: true },
+      _sum: { grand_total: true },
+      _max: { created_at: true },
+    })
+
+    const totalGallons = await prisma.salesTransactionItem.aggregate({
+      where: {
+        sales_transaction: {
+          tenant_id: ctx.tenantId,
+          deleted_at: null,
+          customer_id: id,
+          status: 'COMPLETED',
+          ...(ctx.branchId ? { branch_id: ctx.branchId } : {}),
+        },
+      },
+      _sum: { quantity: true },
+    })
+
+    return {
+      customerId: id,
+      totalPurchases: summary._count.id,
+      totalGallons: Number(totalGallons._sum.quantity ?? 0),
+      totalSpent: Number(summary._sum.grand_total ?? 0),
+      lastPurchase: summary._max.created_at?.toISOString() ?? null,
+    }
+  }
+
+  /**
+   * Get paginated sales history for a customer.
+   */
+  async getCustomerSalesHistory(
+    id: string,
+    query: CustomerListQuery,
+    ctx: CustomerContext,
+  ): Promise<CustomerSalesHistoryResponse> {
+    const customer = await this.repository.findUnique(id, ctx)
+    if (!customer) {
+      throw new NotFoundError('Customer')
+    }
+
+    const where: Record<string, unknown> = {
+      tenant_id: ctx.tenantId,
+      deleted_at: null,
+      customer_id: id,
+      status: 'COMPLETED',
+    }
+    if (ctx.branchId) {
+      where.branch_id = ctx.branchId
+    }
+
+    const page = query.page ?? 1
+    const limit = query.limit ?? 20
+    const skip = (page - 1) * limit
+
+    const [total, sales] = await prisma.salesTransaction.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: { created_at: 'desc' },
+      include: {
+        items: {
+          select: {
+            quantity: true,
+          },
+        },
+        payments: {
+          select: {
+            payment_method: true,
+            reference_number: true,
+          },
+        },
+      },
+    })
+
+    const data = sales.map((sale: any) => ({
+      id: sale.id,
+      invoiceNumber: sale.invoice_number,
+      date: sale.created_at.toISOString(),
+      quantity: sale.items.reduce((sum: number, item: any) => sum + item.quantity, 0),
+      amount: Number(sale.grand_total),
+      channel: sale.channel,
+      paymentMethod: sale.payments[0]?.payment_method ?? null,
+      paymentReference: sale.payments[0]?.reference_number ?? null,
+    }))
+
+    return {
+      data,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit) || 1,
+      },
+    }
+  }
+
+  // -----------------------------------------------------------------------
   // UPDATE
   // -----------------------------------------------------------------------
 
@@ -156,15 +281,16 @@ export class CustomerService {
       )
     }
 
-    // --- Duplicate phone / email check (exclude current record) ---
+    // --- Duplicate phone / email / name check (exclude current record) ---
     const phoneToCheck = data.phone ?? existing.phone
     const emailToCheck = data.email ?? existing.email
-    if (data.phone || data.email) {
-      const conflict = await this.repository.findDuplicate(phoneToCheck, emailToCheck ?? null, ctx, id)
+    const nameToCheck = data.fullName ?? existing.full_name
+    if (data.phone || data.email || data.fullName) {
+      const conflict = await this.repository.findDuplicate(phoneToCheck, emailToCheck ?? null, nameToCheck, ctx, id)
       if (conflict) {
         throw new AppError(
           httpStatus.CONFLICT,
-          'A different customer with this phone number or email already exists',
+          'A different customer with this phone number, email, or name already exists',
         )
       }
     }

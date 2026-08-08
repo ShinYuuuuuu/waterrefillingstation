@@ -17,6 +17,9 @@ import {
   InventoryLedgerListQuery,
   InventoryAdjustmentListQuery,
   LowStockAlertQuery,
+  CreateInventoryUpdateRequest,
+  InventoryUpdateRequestListQuery,
+  ReviewInventoryUpdateRequest,
 } from './inventory.types'
 
 /**
@@ -415,6 +418,88 @@ export const inventoryController = {
       const ctx = buildContext(req)
       const query = req.validatedQuery as InventoryAdjustmentListQuery
       const result = await inventoryService.listAdjustments(query, ctx)
+      return res.status(httpStatus.OK).json(successResponse(result))
+    } catch (error) {
+      next(error)
+    }
+  },
+
+  // =======================================================================
+  // INVENTORY UPDATE REQUESTS
+  // =======================================================================
+
+  /**
+   * POST /inventory/update-requests
+   * Cashier submits an inventory count update request.
+   */
+  async createUpdateRequest(req: Request, res: Response, next: NextFunction) {
+    try {
+      const ctx = buildContext(req)
+      const body = req.validatedBody as CreateInventoryUpdateRequest
+      const result = await inventoryService.createInventoryUpdateRequest(body, ctx)
+      return res.status(httpStatus.CREATED).json(successResponse(result))
+    } catch (error) {
+      next(error)
+    }
+  },
+
+  /**
+   * GET /inventory/update-requests
+   * List inventory update requests (filtered by role).
+   */
+  async listUpdateRequests(req: Request, res: Response, next: NextFunction) {
+    try {
+      const ctx = buildContext(req)
+      const query = req.validatedQuery as InventoryUpdateRequestListQuery
+      const result = await inventoryService.listInventoryUpdateRequests(query, ctx)
+      return res.status(httpStatus.OK).json(successResponse(result.data, result.meta))
+    } catch (error) {
+      next(error)
+    }
+  },
+
+  /**
+   * GET /inventory/update-requests/:requestId
+   * Retrieve a single inventory update request.
+   */
+  async getUpdateRequest(req: Request, res: Response, next: NextFunction) {
+    try {
+      const ctx = buildContext(req)
+      const { requestId } = req.validatedParams as { requestId: string }
+      const result = await inventoryService.getInventoryUpdateRequest(requestId, ctx)
+      return res.status(httpStatus.OK).json(successResponse(result))
+    } catch (error) {
+      next(error)
+    }
+  },
+
+  /**
+   * POST /inventory/update-requests/:requestId/approve
+   * Owner approves an inventory update request.
+   */
+  async approveUpdateRequest(req: Request, res: Response, next: NextFunction) {
+    try {
+      const ctx = buildContext(req)
+      const { requestId } = req.validatedParams as { requestId: string }
+      const body = req.validatedBody as { approvedQuantity?: number; notes?: string | null }
+      const approvedQuantity = body.approvedQuantity ?? 0
+      const result = await inventoryService.approveInventoryUpdateRequest(requestId, ctx, approvedQuantity, body.notes ?? null)
+      return res.status(httpStatus.OK).json(successResponse(result))
+    } catch (error) {
+      next(error)
+    }
+  },
+
+  /**
+   * POST /inventory/update-requests/:requestId/reject
+   * Owner rejects an inventory update request.
+   */
+  async rejectUpdateRequest(req: Request, res: Response, next: NextFunction) {
+    try {
+      const ctx = buildContext(req)
+      const { requestId } = req.validatedParams as { requestId: string }
+      const body = req.validatedBody as { notes?: string | null }
+      const result = await inventoryService.rejectInventoryUpdateRequest(requestId, ctx, body.notes ?? null)
       return res.status(httpStatus.OK).json(successResponse(result))
     } catch (error) {
       next(error)

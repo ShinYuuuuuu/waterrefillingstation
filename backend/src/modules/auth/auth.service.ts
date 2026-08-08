@@ -1,5 +1,6 @@
 import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
+import { randomUUID } from 'node:crypto'
 import { prisma } from '../../database'
 import { config } from '../../config'
 import { logger } from '../../utils/logger'
@@ -123,7 +124,16 @@ export class AuthService {
 
     const storedToken = await prisma.refreshToken.findUnique({
       where: { token: refreshToken },
-      include: { user: true },
+      include: {
+        user: {
+          include: {
+            user_roles: {
+              where: { is_active: true },
+              include: { role: true },
+            },
+          },
+        },
+      },
     })
 
     if (!storedToken || storedToken.revoked || storedToken.expires_at < new Date()) {
@@ -193,6 +203,9 @@ export class AuthService {
         userId: user.id,
         tenantId: user.tenant_id,
         email: user.email,
+        // Ensure a rotated token is unique even when it is issued in the
+        // same second with otherwise identical claims.
+        jti: randomUUID(),
       },
       config.jwtRefreshSecret,
       { expiresIn: config.jwtRefreshExpiry as any, issuer: 'wsms', audience: 'wsms-client' },

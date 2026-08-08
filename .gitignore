@@ -49,6 +49,15 @@ desktop.ini
 # Testing
 coverage/
 .nyc_output/
+.playwright-mcp/
+
+# Local API verification artifacts
+login_response.json
+login_test.json
+me_response.json
+test_login.ps1
+test_me.ps1
+test_rider_me.ps1
 
 # Docker
 docker-compose.override.yml

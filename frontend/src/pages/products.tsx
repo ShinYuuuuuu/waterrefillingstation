@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { PageLayout } from '@/layouts/page-layout'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { SearchBar } from '@/components/ui/search-bar'
 import { DataTable } from '@/components/ui/data-table'
 import { SkeletonTable } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
@@ -17,22 +16,12 @@ import type { Product, ProductType, CreateProductRequest, UpdateProductRequest }
 import { useToast } from '@/components/ui/toast'
 
 const PRODUCT_TYPES = [
-  { value: 'FINISHED_GOOD', label: 'Finished Good' },
-  { value: 'RAW_MATERIAL', label: 'Raw Material' },
-  { value: 'CONTAINER', label: 'Container' },
-  { value: 'ACCESSORY', label: 'Accessory' },
+  { value: 'FINISHED_GOOD', label: 'Water / Stocked Product' },
   { value: 'SERVICE', label: 'Service' },
 ] as const
 
 const UNIT_OF_MEASURE_OPTIONS = [
   { value: 'pcs', label: 'Pieces (pcs)' },
-  { value: 'L', label: 'Liters (L)' },
-  { value: 'kg', label: 'Kilograms (kg)' },
-  { value: 'g', label: 'Grams (g)' },
-  { value: 'box', label: 'Box' },
-  { value: 'case', label: 'Case' },
-  { value: 'set', label: 'Set' },
-  { value: 'bottle', label: 'Bottle' },
   { value: 'gallon', label: 'Gallon' },
   { value: 'service', label: 'Service' },
 ]
@@ -42,9 +31,12 @@ export function ProductsPage() {
   const { addToast } = useToast()
   const [searchQuery, setSearchQuery] = useState('')
   const [page, setPage] = useState(1)
+  const [statusFilter, setStatusFilter] = useState<'active' | 'archived' | 'all'>('active')
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
+  const [archiveTargetId, setArchiveTargetId] = useState<string | null>(null)
+  const [reactivateTargetId, setReactivateTargetId] = useState<string | null>(null)
 
   const [formData, setFormData] = useState<{
     categoryId: string
@@ -57,7 +49,7 @@ export function ProductsPage() {
     costPrice: number | string
     isContainer: boolean
     depositAmount?: number | string | null
-    reorderLevel: number
+    reorderLevel: number | string
     isActive: boolean
   }>({
     categoryId: '',
@@ -65,25 +57,26 @@ export function ProductsPage() {
     name: '',
     type: 'FINISHED_GOOD',
     unitOfMeasure: '',
-    basePrice: 0,
-    costPrice: 0,
+    basePrice: '',
+    costPrice: '',
     isContainer: false,
-    reorderLevel: 0,
+    reorderLevel: '',
     isActive: true,
   })
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
 
   useEffect(() => {
     setPage(1)
-  }, [searchQuery])
+  }, [searchQuery, statusFilter])
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['products', searchQuery, page],
+    queryKey: ['products', searchQuery, page, statusFilter],
     queryFn: () =>
       productService.list({
         search: searchQuery || undefined,
         page,
         limit: 20,
+        isActive: statusFilter === 'active' ? true : statusFilter === 'archived' ? false : undefined,
       }),
   })
 
@@ -131,6 +124,30 @@ export function ProductsPage() {
     },
   })
 
+  const archiveMutation = useMutation({
+    mutationFn: (id: string) => productService.archive(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] })
+      setArchiveTargetId(null)
+      addToast({ type: 'success', title: 'Product archived successfully' })
+    },
+    onError: (err: any) => {
+      addToast({ type: 'error', title: err?.response?.data?.error?.message || 'Failed to archive product' })
+    },
+  })
+
+  const reactivateMutation = useMutation({
+    mutationFn: (id: string) => productService.reactivate(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] })
+      setReactivateTargetId(null)
+      addToast({ type: 'success', title: 'Product reactivated successfully' })
+    },
+    onError: (err: any) => {
+      addToast({ type: 'error', title: err?.response?.data?.error?.message || 'Failed to reactivate product' })
+    },
+  })
+
   const resetForm = () => {
     setFormData({
       categoryId: '',
@@ -138,10 +155,10 @@ export function ProductsPage() {
       name: '',
       type: 'FINISHED_GOOD',
       unitOfMeasure: '',
-      basePrice: 0,
-      costPrice: 0,
+      basePrice: '',
+      costPrice: '',
       isContainer: false,
-      reorderLevel: 0,
+      reorderLevel: '',
       isActive: true,
     })
     setFormErrors({})
@@ -197,8 +214,8 @@ export function ProductsPage() {
       unitOfMeasure: formData.unitOfMeasure,
       basePrice: toNumber(formData.basePrice),
       costPrice: toNumber(formData.costPrice),
-      isContainer: formData.isContainer,
-      depositAmount: formData.isContainer ? toNumber(formData.depositAmount ?? 0) : null,
+      isContainer: false,
+      depositAmount: null,
       reorderLevel: toNumber(formData.reorderLevel),
       isActive: formData.isActive,
     }
@@ -217,15 +234,40 @@ export function ProductsPage() {
     }
   }
 
+  const handleDeleteClick = async (item: Product) => {
+    try {
+      const result = await productService.canDelete(item.id)
+      if (result.canDelete) {
+        setDeleteTargetId(item.id)
+      } else {
+        setArchiveTargetId(item.id)
+      }
+    } catch (err: any) {
+      addToast({ type: 'error', title: err?.response?.data?.error?.message || 'Failed to check product' })
+    }
+  }
+
   const handleDelete = () => {
     if (deleteTargetId) {
       deleteMutation.mutate(deleteTargetId)
     }
   }
 
+  const handleArchive = () => {
+    if (archiveTargetId) {
+      archiveMutation.mutate(archiveTargetId)
+    }
+  }
+
+  const handleReactivate = () => {
+    if (reactivateTargetId) {
+      reactivateMutation.mutate(reactivateTargetId)
+    }
+  }
+
   const products = data?.data ?? []
   const isSubmitting = createMutation.isPending || updateMutation.isPending
-  const isDeleting = deleteMutation.isPending
+  const isDeleting = deleteMutation.isPending || archiveMutation.isPending || reactivateMutation.isPending
 
   const columns = [
     { key: 'name', header: 'Product Name' },
@@ -244,7 +286,7 @@ export function ProductsPage() {
     },
     {
       key: 'reorderLevel',
-      header: 'Stock',
+      header: 'Low-stock threshold',
       render: (item: Product) => String(item.reorderLevel),
     },
     {
@@ -264,9 +306,35 @@ export function ProductsPage() {
           <Button variant="ghost" size="sm" onClick={() => openEditForm(item)}>
             <FiEdit className="w-4 h-4" />
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => setDeleteTargetId(item.id)}>
-            <FiTrash2 className="w-4 h-4 text-red-600" />
-          </Button>
+          {item.isActive ? (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleDeleteClick(item)}
+                title="Delete product"
+              >
+                <FiTrash2 className="w-4 h-4 text-red-600" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setArchiveTargetId(item.id)}
+                title="Archive product"
+              >
+                Archive
+              </Button>
+            </>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setReactivateTargetId(item.id)}
+              title="Reactivate product"
+            >
+              Reactivate
+            </Button>
+          )}
         </div>
       ),
     },
@@ -284,7 +352,7 @@ export function ProductsPage() {
   if (isLoading) {
     return (
       <PageLayout
-        title="Products"
+        title="Products & Services"
         breadcrumbItems={[
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Products' },
@@ -324,22 +392,29 @@ export function ProductsPage() {
 
   return (
     <PageLayout
-      title="Products"
+      title="Products & Services"
       breadcrumbItems={[
         { label: 'Dashboard', href: '/dashboard' },
         { label: 'Products' },
       ]}
     >
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <SearchBar
-          value={searchQuery}
-          onChange={setSearchQuery}
-          placeholder="Search products..."
-        />
+      <div className="flex justify-end">
         <Button onClick={openCreateForm}>
           <FiPlus className="w-4 h-4 mr-2" />
           Add Product
         </Button>
+      </div>
+
+      <div className="flex items-center gap-2 mt-4">
+        <Select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as 'active' | 'archived' | 'all')}
+          options={[
+            { value: 'active', label: 'Active' },
+            { value: 'archived', label: 'Archived' },
+            { value: 'all', label: 'All' },
+          ]}
+        />
       </div>
 
       {products.length === 0 ? (
@@ -373,7 +448,7 @@ export function ProductsPage() {
           setEditingProduct(null)
           resetForm()
         }}
-        title={editingProduct ? 'Edit Product' : 'Add Product'}
+        title={editingProduct ? 'Edit Product or Service' : 'Add Product or Service'}
         size="lg"
       >
         <div className="space-y-4">
@@ -430,7 +505,7 @@ export function ProductsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Base Price
+                Unit Price
               </label>
               <Input
                 type="number"
@@ -438,7 +513,7 @@ export function ProductsPage() {
                 min="0"
                 value={formData.basePrice}
                 onChange={(e) => setFormData({ ...formData, basePrice: e.target.value })}
-                placeholder="0.00"
+                placeholder="Enter price"
               />
             </div>
             <div>
@@ -451,7 +526,7 @@ export function ProductsPage() {
                 min="0"
                 value={formData.costPrice}
                 onChange={(e) => setFormData({ ...formData, costPrice: e.target.value })}
-                placeholder="0.00"
+                placeholder="Enter cost"
               />
             </div>
           </div>
@@ -466,41 +541,13 @@ export function ProductsPage() {
                 min="0"
                 step="1"
                 value={formData.reorderLevel}
-                onChange={(e) => setFormData({ ...formData, reorderLevel: Number(e.target.value) })}
-                placeholder="0"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Category
-              </label>
-              <Select
-                options={[
-                  { value: '', label: 'No category' },
-                  { value: 'cat-water', label: 'Water' },
-                  { value: 'cat-containers', label: 'Containers' },
-                  { value: 'cat-accessories', label: 'Accessories' },
-                  { value: 'cat-raw-materials', label: 'Raw Materials' },
-                ]}
-                value={formData.categoryId}
-                onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, reorderLevel: e.target.value })}
+                placeholder="Enter quantity"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="flex items-center gap-2 pt-6">
-              <input
-                id="isContainer"
-                type="checkbox"
-                checked={formData.isContainer}
-                onChange={(e) => setFormData({ ...formData, isContainer: e.target.checked })}
-                className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-              />
-              <label htmlFor="isContainer" className="text-sm text-gray-700 dark:text-gray-300">
-                Is Container
-              </label>
-            </div>
             <div className="flex items-center gap-2 pt-6">
               <input
                 id="isActive"
@@ -514,22 +561,6 @@ export function ProductsPage() {
               </label>
             </div>
           </div>
-
-          {formData.isContainer && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Deposit Amount
-              </label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={formData.depositAmount ?? ''}
-                onChange={(e) => setFormData({ ...formData, depositAmount: e.target.value ? Number(e.target.value) : null })}
-                placeholder="0.00"
-              />
-            </div>
-          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -568,11 +599,41 @@ export function ProductsPage() {
         title="Delete Product"
         description={
           deleteTargetId
-            ? 'Are you sure you want to delete this product? This action cannot be undone.'
+            ? 'This product has no inventory or transaction history and can be permanently deleted.'
             : ''
         }
-        confirmText="Delete"
+        confirmText="Delete Permanently"
         variant="danger"
+        loading={isDeleting}
+      />
+
+      <ConfirmDialog
+        open={!!archiveTargetId}
+        onClose={() => setArchiveTargetId(null)}
+        onConfirm={handleArchive}
+        title="Archive Product"
+        description={
+          archiveTargetId
+            ? 'This product has inventory or transaction history and cannot be permanently deleted without damaging records. Archive it instead?'
+            : ''
+        }
+        confirmText="Archive Product"
+        variant="default"
+        loading={isDeleting}
+      />
+
+      <ConfirmDialog
+        open={!!reactivateTargetId}
+        onClose={() => setReactivateTargetId(null)}
+        onConfirm={handleReactivate}
+        title="Reactivate Product"
+        description={
+          reactivateTargetId
+            ? 'This product will become available for new sales and active listings.'
+            : ''
+        }
+        confirmText="Reactivate"
+        variant="default"
         loading={isDeleting}
       />
     </PageLayout>

@@ -171,6 +171,92 @@ export class ProductService {
   }
 
   /**
+   * Archive a product by setting `is_active = false`.
+   *
+   * Archiving preserves all historical data (inventory, sales transactions,
+   * delivery orders, etc.) while removing the product from active sale flows
+   * and new selection dropdowns.
+   *
+   * @throws NotFoundError if the product does not exist or is soft-deleted.
+   */
+  async archiveProduct(id: string, ctx: ProductContext): Promise<ProductResponse> {
+    logger.debug('Request to archive product', { id, tenantId: ctx.tenantId })
+
+    const existing = await this.repository.findUnique(id, ctx)
+    if (!existing) {
+      throw new NotFoundError('Product')
+    }
+
+    const archived = await this.repository.archive(id, ctx)
+
+    await this.logAudit({
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      action: 'ARCHIVE',
+      entityType: 'Product',
+      entityId: id,
+      beforeData: existing,
+      afterData: archived,
+    })
+
+    return ProductMapper.toResponse(archived)
+  }
+
+  /**
+   * Reactivate an archived product by setting `is_active = true`.
+   *
+   * @throws NotFoundError if the product does not exist or is soft-deleted.
+   */
+  async reactivateProduct(id: string, ctx: ProductContext): Promise<ProductResponse> {
+    logger.debug('Request to reactivate product', { id, tenantId: ctx.tenantId })
+
+    const existing = await this.repository.findUnique(id, ctx)
+    if (!existing) {
+      throw new NotFoundError('Product')
+    }
+
+    const reactivated = await this.repository.reactivate(id, ctx)
+
+    await this.logAudit({
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      action: 'REACTIVATE',
+      entityType: 'Product',
+      entityId: id,
+      beforeData: existing,
+      afterData: reactivated,
+    })
+
+    return ProductMapper.toResponse(reactivated)
+  }
+
+  /**
+   * Check whether a product can be safely hard-deleted.
+   *
+   * A product is safe to delete when it has:
+   *  - No active inventory (`quantity_on_hand > 0` or `reserved_quantity > 0`)
+   *  - No references in completed sales transactions
+   *
+   * @returns Object with `canDelete` flag and optional `reason` string.
+   */
+  async canDeleteProduct(id: string, ctx: ProductContext): Promise<{ canDelete: boolean; reason?: string }> {
+    const product = await this.repository.findUnique(id, ctx)
+    if (!product) {
+      return { canDelete: false, reason: 'Product not found' }
+    }
+
+    if (await this.repository.hasActiveInventory(id, ctx)) {
+      return { canDelete: false, reason: 'This product has active inventory' }
+    }
+
+    if (await this.repository.hasActiveSaleReferences(id, ctx)) {
+      return { canDelete: false, reason: 'This product is referenced by active sales' }
+    }
+
+    return { canDelete: true }
+  }
+
+  /**
    * Soft-delete a product.
    *
    * Pre-condition checks (all must pass before deletion):

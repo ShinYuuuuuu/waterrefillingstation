@@ -12,6 +12,7 @@ import { productRoutes } from './modules/product/product.routes'
 import { gallonRoutes } from './modules/gallons/gallon.routes'
 import { inventoryRoutes } from './modules/inventory/inventory.routes'
 import { saleRoutes } from './modules/sales/sales.routes'
+import { deliveryRoutes } from './modules/delivery/delivery.routes'
 import { swaggerRouter } from './docs/swagger'
 
 export function createApp() {
@@ -54,6 +55,7 @@ export function createApp() {
   app.use('/api/v1/gallons', gallonRoutes)
   app.use('/api/v1/inventory', inventoryRoutes)
   app.use('/api/v1/sales', saleRoutes)
+  app.use('/api/v1/delivery', deliveryRoutes)
   app.use('/api/v1/docs', swaggerRouter)
 
   // 404 handler

@@ -4,7 +4,7 @@ This section details the inventory and container management processes within the
 
 ## 18.1 Product Catalog Management
 
-- **Objective:** Maintain an accurate and up-to-date catalog of all sellable products, raw materials, and company-owned containers.
+- **Objective:** Maintain an accurate catalog of water products and services. The owner configures a unit price; the cashier enters quantity during each sale.
 - **Process:**
   1. **Define Product Categories:** Create a hierarchical structure (e.g., Water Products, Accessories, Raw Materials, Containers).
   2. **Add New Product:**
@@ -32,9 +32,9 @@ This section details the inventory and container management processes within the
 - **Key Entities:** `products`, `branch_inventory`, `inventory_ledger`.
 - **CRUD Modules:** Inventory Adjustments (Create/Read/Approve).
 
-## 18.3 Container Asset Management
+## 18.3 Aggregate Gallon Inventory Management
 
-- **Objective:** Track individual company-owned containers by their unique tag/QR code, managing their lifecycle and location.
+- **Objective:** Track the shop-owned gallon pool using aggregate counts suitable for real-world circulation where individual gallons cannot be followed reliably.
 - **Process:**
   1. **Container Registration:** When new physical containers are acquired, `inventory_staff` registers them by scanning their unique `tag_code` (QR/barcode) and associating them with a `product` type (e.g., 5-gallon round bottle). Initial `status` is `in_stock`, `current_holder_type` is `branch`, `current_holder_id` is the `branch.id`.
   2. **Issuance to Customer (Deposit Charged):** When a customer takes a filled container and doesn't return an empty, the system records the `container` as `with_customer`, updates `current_holder_id` to `customer.id`, and charges `deposit_amount` (logged in `container_deposits`).

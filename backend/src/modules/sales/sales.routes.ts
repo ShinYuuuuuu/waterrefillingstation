@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { authenticateToken, requirePermission } from '../../middleware/authJwt'
+import { authenticateToken, requirePermission, requireRole } from '../../middleware/authJwt'
 import { validateBody, validateRequest } from '../../middleware/validateRequest'
 import { saleController } from './sales.controller'
 import { SalesPermission } from './sales.permissions'
@@ -51,6 +51,13 @@ saleRoutes.get(
   requirePermission(SalesPermission.READ),
   validateRequest(dailySummaryQuerySchema),
   saleController.dailySummary,
+)
+
+// GET /sales/income-trends — owner dashboard graph data.
+saleRoutes.get(
+  '/income-trends',
+  requireRole('owner', 'super_admin'),
+  saleController.incomeTrends,
 )
 
 // GET /sales/receipt/:saleId — get sale receipt data.

@@ -125,12 +125,16 @@ export class CustomerRepository {
   async findDuplicate(
     phone: string,
     email: string | null | undefined,
+    name: string | null | undefined,
     ctx: CustomerContext,
     excludeId?: string,
   ): Promise<Customer | null> {
     const or: Record<string, unknown>[] = [{ phone: { equals: phone } }]
     if (email) {
       or.push({ email: { equals: email } })
+    }
+    if (name) {
+      or.push({ full_name: { equals: name, mode: 'insensitive' } })
     }
 
     const where: Record<string, unknown> = {

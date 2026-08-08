@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { PageLayout } from '@/layouts/page-layout'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { SearchBar } from '@/components/ui/search-bar'
 import { DataTable } from '@/components/ui/data-table'
 import { SkeletonTable } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
@@ -15,8 +14,16 @@ import { useToast } from '@/components/ui/toast'
 import { useAuthContext } from '@/contexts/auth-context'
 import { apiClient } from '@/api/client'
 import { inventoryService } from '@/services/inventory.service'
-import type { InventoryItem, LedgerEntry, StockCountSession, AdjustmentRequest } from '@/types/inventory'
-import { FiEdit, FiFileText, FiCheckCircle, FiAlertTriangle, FiBell } from 'react-icons/fi'
+import { productService } from '@/services/product.service'
+import { gallonService } from '@/services/gallon.service'
+import type {
+  InventoryItem,
+  LedgerEntry,
+  StockCountSession,
+  AdjustmentRequest,
+  InventoryUpdateRequest,
+} from '@/types/inventory'
+import { FiEdit, FiFileText, FiCheckCircle, FiAlertTriangle, FiRefreshCw, FiPlus } from 'react-icons/fi'
 
 export function InventoryPage() {
   const queryClient = useQueryClient()
@@ -30,12 +37,20 @@ export function InventoryPage() {
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null)
 
   const [isAdjustOpen, setIsAdjustOpen] = useState(false)
+  const [isAddInventoryOpen, setIsAddInventoryOpen] = useState(false)
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
   const [isStockCountOpen, setIsStockCountOpen] = useState(false)
   const [isNotifyOpen, setIsNotifyOpen] = useState(false)
+  const [isUpdateCountOpen, setIsUpdateCountOpen] = useState(false)
+  const [isStillLowOpen, setIsStillLowOpen] = useState(false)
+  const [isPendingApprovalsOpen, setIsPendingApprovalsOpen] = useState(false)
 
   const [adjustForm, setAdjustForm] = useState({ quantity: '', reason: 'MANUAL' as AdjustmentRequest['reason'], notes: '' })
   const [adjustError, setAdjustError] = useState('')
+  const [updateCountForm, setUpdateCountForm] = useState({ quantity: '', notes: '' })
+  const [updateCountError, setUpdateCountError] = useState('')
+  const [addInventoryForm, setAddInventoryForm] = useState({ productId: '', quantityOnHand: '' })
+  const [addInventoryError, setAddInventoryError] = useState('')
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['inventory', 'branch', searchQuery, page, lowStockOnly],
@@ -45,6 +60,32 @@ export function InventoryPage() {
   const { data: lowStockAlerts } = useQuery({
     queryKey: ['inventory', 'alerts', 'low-stock'],
     queryFn: () => inventoryService.getLowStockAlerts(),
+    enabled: isOwner,
+  })
+
+  const { data: availableProducts } = useQuery({
+    queryKey: ['products', 'inventory-options'],
+    queryFn: () => productService.list({ page: 1, limit: 100, isActive: true }),
+    enabled: isOwner && isAddInventoryOpen,
+  })
+
+  const { data: gallonSummary } = useQuery({
+    queryKey: ['gallons', 'inventory-summary'],
+    queryFn: async () => {
+      const statuses = ['IN_STOCK', 'WITH_CUSTOMER', 'WITH_RIDER', 'WITH_RESELLER', 'DAMAGED', 'LOST']
+      const results = await Promise.all(
+        statuses.map((status) => gallonService.listGallons({ page: 1, limit: 1, status })),
+      )
+      const totals = Object.fromEntries(statuses.map((status, index) => [status, results[index].meta.total]))
+      const inCirculation = totals.WITH_CUSTOMER + totals.WITH_RIDER + totals.WITH_RESELLER
+      return {
+        atShop: totals.IN_STOCK,
+        inCirculation,
+        damaged: totals.DAMAGED,
+        lost: totals.LOST,
+        totalOwned: totals.IN_STOCK + inCirculation + totals.DAMAGED + totals.LOST,
+      }
+    },
     enabled: isOwner,
   })
 
@@ -63,6 +104,12 @@ export function InventoryPage() {
     enabled: isStockCountOpen && isOwner,
   })
 
+  const { data: pendingRequests, refetch: refetchPendingRequests } = useQuery({
+    queryKey: ['inventory', 'update-requests', 'pending'],
+    queryFn: () => inventoryService.listInventoryUpdateRequests({ status: 'PENDING', page: 1, limit: 50 }),
+    enabled: isOwner,
+  })
+
   const adjustMutation = useMutation({
     mutationFn: (payload: AdjustmentRequest) => inventoryService.createAdjustment(payload),
     onSuccess: () => {
@@ -78,12 +125,95 @@ export function InventoryPage() {
     },
   })
 
+  const addInventoryMutation = useMutation({
+    mutationFn: () => inventoryService.createBranchInventory({
+      productId: addInventoryForm.productId,
+      quantityOnHand: Number(addInventoryForm.quantityOnHand),
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
+      setIsAddInventoryOpen(false)
+      setAddInventoryForm({ productId: '', quantityOnHand: '' })
+      setAddInventoryError('')
+      addToast({ type: 'success', title: 'Inventory added successfully' })
+    },
+    onError: (err: any) => {
+      addToast({ type: 'error', title: err?.response?.data?.error?.message || 'Failed to add inventory' })
+    },
+  })
+
+  const handleAddInventory = () => {
+    const quantity = Number(addInventoryForm.quantityOnHand)
+    if (!addInventoryForm.productId || !Number.isInteger(quantity) || quantity < 0) {
+      setAddInventoryError('Select a product and enter a valid whole-number quantity')
+      return
+    }
+    setAddInventoryError('')
+    addInventoryMutation.mutate()
+  }
+
   const notifyMutation = useMutation({
     mutationFn: () => Promise.resolve({ success: true }),
     onSuccess: () => {
       addToast({ type: 'success', title: 'Low-stock notice sent to owner' })
       setIsNotifyOpen(false)
       setSelectedItem(null)
+    },
+  })
+
+  const updateCountMutation = useMutation({
+    mutationFn: (payload: { productId: string; requestedQuantity: number; notes?: string | null }) =>
+      inventoryService.createInventoryUpdateRequest(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
+      addToast({ type: 'success', title: 'Update request submitted for owner approval' })
+      setIsUpdateCountOpen(false)
+      setSelectedItem(null)
+      setUpdateCountForm({ quantity: '', notes: '' })
+      setUpdateCountError('')
+    },
+    onError: (err: any) => {
+      addToast({ type: 'error', title: err?.response?.data?.error?.message || 'Failed to submit update request' })
+    },
+  })
+
+  const stillLowMutation = useMutation({
+    mutationFn: (payload: { productId: string; requestedQuantity: number; notes?: string | null }) =>
+      inventoryService.createInventoryUpdateRequest(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
+      addToast({ type: 'success', title: 'Low-stock report submitted' })
+      setIsStillLowOpen(false)
+      setSelectedItem(null)
+    },
+    onError: (err: any) => {
+      addToast({ type: 'error', title: err?.response?.data?.error?.message || 'Failed to submit low-stock report' })
+    },
+  })
+
+  const approveMutation = useMutation({
+    mutationFn: ({ requestId, approvedQuantity, notes }: { requestId: string; approvedQuantity: number; notes?: string | null }) =>
+      inventoryService.approveInventoryUpdateRequest(requestId, approvedQuantity, notes),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
+      refetchPendingRequests()
+      addToast({ type: 'success', title: 'Update request approved' })
+    },
+    onError: (err: any) => {
+      addToast({ type: 'error', title: err?.response?.data?.error?.message || 'Failed to approve request' })
+    },
+  })
+
+  const rejectMutation = useMutation({
+    mutationFn: ({ requestId, notes }: { requestId: string; notes?: string | null }) =>
+      inventoryService.rejectInventoryUpdateRequest(requestId, notes),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
+      refetchPendingRequests()
+      addToast({ type: 'success', title: 'Update request rejected' })
+    },
+    onError: (err: any) => {
+      addToast({ type: 'error', title: err?.response?.data?.error?.message || 'Failed to reject request' })
     },
   })
 
@@ -112,11 +242,54 @@ export function InventoryPage() {
     notifyMutation.mutate()
   }
 
+  const handleUpdateCount = () => {
+    if (!selectedItem) return
+    const qty = Number(updateCountForm.quantity)
+    if (isNaN(qty) || qty < 0) {
+      setUpdateCountError('Please enter a valid quantity')
+      return
+    }
+    setUpdateCountError('')
+    updateCountMutation.mutate({
+      productId: selectedItem.productId,
+      requestedQuantity: qty,
+      notes: updateCountForm.notes || null,
+    })
+  }
+
+  const handleStillLow = () => {
+    if (!selectedItem) return
+    stillLowMutation.mutate({
+      productId: selectedItem.productId,
+      requestedQuantity: selectedItem.quantityOnHand,
+      notes: 'Still low - needs replenishment',
+    })
+  }
+
+  const handleApprove = (request: InventoryUpdateRequest) => {
+    const approvedQuantity = request.approvedQuantity ?? request.requestedQuantity
+    approveMutation.mutate({ requestId: request.id, approvedQuantity, notes: request.notes })
+  }
+
+  const handleReject = (request: InventoryUpdateRequest) => {
+    rejectMutation.mutate({ requestId: request.id, notes: request.notes })
+  }
+
   const getStatusBadge = (item: InventoryItem) => {
     const available = item.availableQuantity
     if (available <= 0) return <Badge variant="danger">Out of Stock</Badge>
     if (available <= item.reorderLevel) return <Badge variant="warning">Low Stock</Badge>
     return <Badge variant="success">In Stock</Badge>
+  }
+
+  const getRequestStatusBadge = (status: string) => {
+    switch (status) {
+      case 'PENDING': return <Badge variant="warning">Pending</Badge>
+      case 'APPROVED': return <Badge variant="success">Approved</Badge>
+      case 'REJECTED': return <Badge variant="danger">Rejected</Badge>
+      case 'RESOLVED': return <Badge variant="default">Resolved</Badge>
+      default: return <Badge>{status}</Badge>
+    }
   }
 
   const columns = useMemo(() => [
@@ -164,10 +337,17 @@ export function InventoryPage() {
                 </Button>
               </>
             )}
-            {!isOwner && isLowStock && (
-              <Button variant="ghost" size="sm" onClick={() => { setSelectedItem(item); setIsNotifyOpen(true); }}>
-                <FiBell className="w-4 h-4 text-yellow-600" />
-              </Button>
+            {!isOwner && (
+              <>
+                <Button variant="ghost" size="sm" onClick={() => { setSelectedItem(item); setIsUpdateCountOpen(true); setUpdateCountForm({ quantity: '', notes: '' }); setUpdateCountError(''); }}>
+                  <FiRefreshCw className="w-4 h-4" />
+                </Button>
+                {isLowStock && (
+                  <Button variant="ghost" size="sm" onClick={() => { setSelectedItem(item); setIsStillLowOpen(true); }}>
+                    <FiAlertTriangle className="w-4 h-4 text-yellow-600" />
+                  </Button>
+                )}
+              </>
             )}
           </div>
         )
@@ -228,12 +408,7 @@ export function InventoryPage() {
         { label: 'Inventory' },
       ]}
     >
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <SearchBar
-          value={searchQuery}
-          onChange={setSearchQuery}
-          placeholder="Search inventory..."
-        />
+      <div className="flex justify-end">
         <div className="flex items-center gap-2">
           <Select
             options={[
@@ -245,13 +420,43 @@ export function InventoryPage() {
             className="w-40"
           />
           {isOwner && (
+            <Button onClick={() => setIsAddInventoryOpen(true)}>
+              <FiPlus className="w-4 h-4 mr-2" />
+              Add Inventory
+            </Button>
+          )}
+          {isOwner && (
             <Button onClick={() => setIsStockCountOpen(true)}>
               <FiCheckCircle className="w-4 h-4 mr-2" />
               Approve Counts
             </Button>
           )}
+          {isOwner && (
+            <Button variant="secondary" onClick={() => setIsPendingApprovalsOpen(true)}>
+              Pending Approvals
+            </Button>
+          )}
         </div>
       </div>
+
+      {isOwner && gallonSummary && (
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          {[
+            ['Total Gallons', gallonSummary.totalOwned],
+            ['At the Shop', gallonSummary.atShop],
+            ['In Circulation', gallonSummary.inCirculation],
+            ['Damaged', gallonSummary.damaged],
+            ['Lost', gallonSummary.lost],
+          ].map(([label, value]) => (
+            <Card key={String(label)}>
+              <CardContent className="py-4">
+                <p className="text-sm text-gray-500 dark:text-gray-400">{label}</p>
+                <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {lowStockAlerts && lowStockAlerts.length > 0 && (
         <Card className="mt-4 border-yellow-200 dark:border-yellow-800">
@@ -285,6 +490,35 @@ export function InventoryPage() {
         />
       )}
 
+      <Modal open={isAddInventoryOpen} onClose={() => setIsAddInventoryOpen(false)} title="Add Inventory" size="md">
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Product or service</label>
+            <Select
+              options={(availableProducts?.data ?? []).map((product) => ({ value: product.id, label: `${product.name} (${product.sku})` }))}
+              value={addInventoryForm.productId}
+              onChange={(event) => setAddInventoryForm({ ...addInventoryForm, productId: event.target.value })}
+              placeholder="Select a product"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Opening quantity</label>
+            <Input
+              type="number"
+              min="0"
+              step="1"
+              value={addInventoryForm.quantityOnHand}
+              onChange={(event) => setAddInventoryForm({ ...addInventoryForm, quantityOnHand: event.target.value })}
+              error={addInventoryError}
+            />
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setIsAddInventoryOpen(false)}>Cancel</Button>
+            <Button onClick={handleAddInventory} loading={addInventoryMutation.isPending}>Add Inventory</Button>
+          </div>
+        </div>
+      </Modal>
+
       {/* Adjust Stock Modal */}
       <Modal open={isAdjustOpen} onClose={() => { setIsAdjustOpen(false); setSelectedItem(null); }} title="Adjust Stock" size="md">
         {selectedItem && (
@@ -301,7 +535,7 @@ export function InventoryPage() {
                   type="number"
                   value={adjustForm.quantity}
                   onChange={(e) => setAdjustForm({ ...adjustForm, quantity: e.target.value })}
-                  placeholder="Use negative to deduct"
+                  placeholder="Enter quantity change"
                   error={adjustError}
                 />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Use negative values to deduct stock</p>
@@ -412,6 +646,105 @@ export function InventoryPage() {
                   >
                     Approve
                   </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Update Count Modal */}
+      <Modal open={isUpdateCountOpen} onClose={() => { setIsUpdateCountOpen(false); setSelectedItem(null); }} title="Update Count" size="md">
+        {selectedItem && (
+          <div className="space-y-4">
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+              <p className="font-medium text-gray-900 dark:text-white">{selectedItem.productName}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Current on hand: {selectedItem.quantityOnHand}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Available: {selectedItem.availableQuantity}</p>
+              <p className="text-sm text-yellow-600 dark:text-yellow-400 mt-1">This request requires owner approval before updating official quantity</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Counted Quantity</label>
+              <Input
+                type="number"
+                value={updateCountForm.quantity}
+                onChange={(e) => setUpdateCountForm({ ...updateCountForm, quantity: e.target.value })}
+                placeholder="Enter counted quantity"
+                error={updateCountError}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Notes</label>
+              <Input
+                value={updateCountForm.notes}
+                onChange={(e) => setUpdateCountForm({ ...updateCountForm, notes: e.target.value })}
+                placeholder="Optional notes"
+              />
+            </div>
+            <div className="flex justify-end gap-3 pt-4">
+              <Button variant="secondary" onClick={() => { setIsUpdateCountOpen(false); setSelectedItem(null); }} disabled={updateCountMutation.isPending}>
+                Cancel
+              </Button>
+              <Button onClick={handleUpdateCount} loading={updateCountMutation.isPending}>
+                Submit for Approval
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Still Low Modal */}
+      <ConfirmDialog
+        open={isStillLowOpen}
+        onClose={() => { setIsStillLowOpen(false); setSelectedItem(null); }}
+        onConfirm={handleStillLow}
+        title="Report Still Low Stock"
+        description={
+          selectedItem
+            ? `Confirm that "${selectedItem.productName}" is still below reorder level (current: ${selectedItem.availableQuantity}, reorder: ${selectedItem.reorderLevel})?`
+            : ''
+        }
+        confirmText="Report Still Low"
+        loading={stillLowMutation.isPending}
+      />
+
+      {/* Pending Approvals Modal */}
+      <Modal open={isPendingApprovalsOpen} onClose={() => { setIsPendingApprovalsOpen(false); }} title="Pending Inventory Updates" size="lg">
+        <div className="space-y-4">
+          {!pendingRequests || pendingRequests.data.length === 0 ? (
+            <p className="text-gray-500 dark:text-gray-400 text-center py-8">No pending inventory update requests</p>
+          ) : (
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {pendingRequests?.data?.map((request: InventoryUpdateRequest) => (
+                <div key={request.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <p className="font-medium text-gray-900 dark:text-white">{request.productName}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Current: {request.previousQuantity} → Counted: {request.requestedQuantity}
+                        {request.approvedQuantity != null && ` → Approved: ${request.approvedQuantity}`}
+                      </p>
+                      {request.notes && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Note: {request.notes}</p>}
+                    </div>
+                    {getRequestStatusBadge(request.status)}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => handleApprove(request)}
+                      disabled={approveMutation.isPending || rejectMutation.isPending}
+                    >
+                      Approve
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => handleReject(request)}
+                      disabled={approveMutation.isPending || rejectMutation.isPending}
+                    >
+                      Reject
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>

@@ -5,6 +5,8 @@ import type {
   CustomerListQuery,
   CreateCustomerRequest,
   UpdateCustomerRequest,
+  CustomerPurchaseSummary,
+  CustomerSalesHistoryResponse,
 } from '@/types/customer'
 
 /**
@@ -65,5 +67,22 @@ export const customerService = {
   /** DELETE /customers/:id — soft-delete a customer. */
   async remove(id: string): Promise<void> {
     await apiClient.delete(`${BASE}/${id}`)
+  },
+
+  /** GET /customers/:id/purchase-summary */
+  async getPurchaseSummary(id: string): Promise<CustomerPurchaseSummary> {
+    const response = await apiClient.get<{ success: boolean; data: CustomerPurchaseSummary }>(`${BASE}/${id}/purchase-summary`)
+    return response.data.data
+  },
+
+  /** GET /customers/:id/sales */
+  async getSalesHistory(id: string, query?: CustomerListQuery): Promise<CustomerSalesHistoryResponse> {
+    const response = await apiClient.get<{ success: boolean; data: CustomerSalesHistoryResponse['data']; meta?: CustomerSalesHistoryResponse['meta'] }>(`${BASE}/${id}/sales`, {
+      params: query,
+    })
+    return {
+      data: response.data.data,
+      meta: response.data.meta ?? { page: 1, limit: 20, total: 0, totalPages: 0 },
+    }
   },
 }

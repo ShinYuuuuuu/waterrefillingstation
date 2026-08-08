@@ -44,6 +44,8 @@ export interface Sale {
   voidedBy: string | null
   notes: string | null
   createdBy: string
+  cashierName: string
+  customerName: string
   createdAt: string
   updatedAt: string
   items: SaleItem[]

@@ -13,7 +13,7 @@ async function main() {
   // Create Tenant
   const tenant = await prisma.tenant.create({
     data: {
-      name: 'AquaPure Water Station',
+      name: "Z's Purified Drinking Water",
       subscription_plan: 'enterprise',
       subscription_status: 'active',
       is_active: true,
@@ -166,6 +166,8 @@ async function main() {
       { tenant_id: tenant.id, module: 'product', action: 'create', code: 'products.create', description: 'Create new products' },
       { tenant_id: tenant.id, module: 'product', action: 'update', code: 'products.update', description: 'Update product details' },
       { tenant_id: tenant.id, module: 'product', action: 'delete', code: 'products.delete', description: 'Delete/deactivate products' },
+      { tenant_id: tenant.id, module: 'product', action: 'archive', code: 'products.archive', description: 'Archive products' },
+      { tenant_id: tenant.id, module: 'product', action: 'reactivate', code: 'products.reactivate', description: 'Reactivate archived products' },
       { tenant_id: tenant.id, module: 'inventory', action: 'read', code: 'inventory.read', description: 'View inventory levels' },
       { tenant_id: tenant.id, module: 'inventory', action: 'create', code: 'inventory.create', description: 'Create inventory records' },
       { tenant_id: tenant.id, module: 'inventory', action: 'update', code: 'inventory.update', description: 'Update inventory records' },
@@ -181,6 +183,9 @@ async function main() {
       { tenant_id: tenant.id, module: 'inventory', action: 'adjust', code: 'inventory.adjust', description: 'Adjust inventory' },
       { tenant_id: tenant.id, module: 'inventory', action: 'ledger_read', code: 'inventory.ledger.read', description: 'View inventory ledger' },
       { tenant_id: tenant.id, module: 'inventory', action: 'alerts_read', code: 'inventory.alerts.read', description: 'View inventory alerts' },
+      { tenant_id: tenant.id, module: 'inventory', action: 'update_request_create', code: 'inventory.update_request.create', description: 'Submit inventory count and low-stock requests' },
+      { tenant_id: tenant.id, module: 'inventory', action: 'update_request_read', code: 'inventory.update_request.read', description: 'View inventory update requests' },
+      { tenant_id: tenant.id, module: 'inventory', action: 'update_request_approve', code: 'inventory.update_request.approve', description: 'Approve or reject inventory update requests' },
       { tenant_id: tenant.id, module: 'sales', action: 'read', code: 'sales.read', description: 'View sales transactions' },
       { tenant_id: tenant.id, module: 'sales', action: 'create', code: 'sales.create', description: 'Create sales transactions' },
       { tenant_id: tenant.id, module: 'sales', action: 'update', code: 'sales.update', description: 'Update sales transactions' },
@@ -191,6 +196,12 @@ async function main() {
       { tenant_id: tenant.id, module: 'gallons', action: 'create', code: 'gallons.create', description: 'Create gallon records' },
       { tenant_id: tenant.id, module: 'gallons', action: 'update', code: 'gallons.update', description: 'Update gallon records' },
       { tenant_id: tenant.id, module: 'gallons', action: 'delete', code: 'gallons.delete', description: 'Delete gallon records' },
+      { tenant_id: tenant.id, module: 'delivery', action: 'read', code: 'delivery.read', description: 'View delivery orders' },
+      { tenant_id: tenant.id, module: 'delivery', action: 'create', code: 'delivery.create', description: 'Create delivery orders' },
+      { tenant_id: tenant.id, module: 'delivery', action: 'update', code: 'delivery.update', description: 'Update delivery orders' },
+      { tenant_id: tenant.id, module: 'delivery', action: 'delete', code: 'delivery.delete', description: 'Delete delivery orders' },
+      { tenant_id: tenant.id, module: 'delivery', action: 'assign', code: 'delivery.assign', description: 'Assign riders to delivery orders' },
+      { tenant_id: tenant.id, module: 'delivery', action: 'status', code: 'delivery.status', description: 'Update delivery order status' },
     ],
     skipDuplicates: true,
   })
@@ -218,15 +229,19 @@ async function main() {
   // Cashier permissions
   await assignPermissions('cashier', [
     'customers.read', 'customers.create', 'customers.update', 'customers.delete',
-    'inventory.read', 'inventory.create', 'inventory.update',
+    'products.read',
+    'inventory.read', 'inventory.create', 'inventory.update', 'inventory.alerts.read',
+    'inventory.update_request.create',
     'sales.read', 'sales.create', 'sales.update', 'sales.payment',
     'gallons.read',
+    'delivery.read', 'delivery.create', 'delivery.update', 'delivery.assign',
   ])
 
   // Rider permissions
   await assignPermissions('rider', [
     'sales.read', 'sales.create', 'sales.update', 'sales.payment',
     'gallons.read',
+    'delivery.read', 'delivery.status',
   ])
 
   // Branch manager permissions
@@ -254,6 +269,7 @@ async function main() {
     'inventory.transfer.create', 'inventory.transfer.receive',
     'inventory.stock_count.start', 'inventory.adjust',
     'inventory.ledger.read', 'inventory.alerts.read',
+    'inventory.update_request.create', 'inventory.update_request.read',
   ])
 
   // Technician permissions
@@ -425,12 +441,31 @@ async function main() {
         name: '5-Gallon Refill (Purified)',
         type: 'FINISHED_GOOD',
         unit_of_measure: 'gallon',
-        base_price: 50,
+        base_price: 20,
         cost_price: 8,
         is_container: false,
         deposit_amount: null,
         reorder_level: 200,
         is_active: true,
+        is_stock_tracked: false,
+      },
+    }),
+    prisma.product.create({
+      data: {
+        tenant_id: tenant.id,
+        category_id: categoryWater.id,
+        sku: 'SERVICE-DELIVERY',
+        name: 'Delivery Fee',
+        description: 'Delivery surcharge charged per gallon of water',
+        type: 'SERVICE',
+        unit_of_measure: 'service',
+        base_price: 5,
+        cost_price: 0,
+        is_container: false,
+        deposit_amount: null,
+        reorder_level: 0,
+        is_active: true,
+        is_stock_tracked: false,
       },
     }),
     prisma.product.create({
@@ -447,6 +482,7 @@ async function main() {
         deposit_amount: 50,
         reorder_level: 20,
         is_active: true,
+        is_stock_tracked: true,
       },
     }),
     prisma.product.create({
@@ -463,6 +499,24 @@ async function main() {
         deposit_amount: null,
         reorder_level: 100,
         is_active: true,
+        is_stock_tracked: false,
+      },
+    }),
+    prisma.product.create({
+      data: {
+        tenant_id: tenant.id,
+        category_id: categoryWater.id,
+        sku: 'WATER-1G-NEW',
+        name: 'A Gallon of Water',
+        type: 'FINISHED_GOOD',
+        unit_of_measure: 'gallon',
+        base_price: 35,
+        cost_price: 10,
+        is_container: false,
+        deposit_amount: null,
+        reorder_level: 100,
+        is_active: true,
+        is_stock_tracked: false,
       },
     }),
     // Accessories
@@ -548,6 +602,17 @@ async function main() {
       },
     }),
   ])
+  await prisma.product.updateMany({
+    where: {
+      tenant_id: tenant.id,
+      sku: { notIn: ['WATER-5G-REFILL', 'SERVICE-DELIVERY'] },
+    },
+    data: { is_active: false },
+  })
+  await prisma.product.update({
+    where: { id: products.find((product) => product.sku === 'WATER-5G-REFILL')!.id },
+    data: { name: 'Purified Water Refill', base_price: 20 },
+  })
   console.log('Created products:', products.length)
 
   // Get product SKUs for gallon types

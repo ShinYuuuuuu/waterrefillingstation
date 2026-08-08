@@ -12,7 +12,7 @@ This section details the various reports available in the Water Station Manageme
 ### 15.1.2 Sales Summary Report (Period-based)
 - **Description:** Aggregated sales data over a selected period (e.g., weekly, monthly, quarterly, custom date range).
 - **Key Metrics:** Total Revenue, Average Sale Value, Number of Transactions, Top 10 Products by Revenue/Quantity, Sales Trends (chart).
-- **Filters:** Date Range, Branch.
+- **Filters:** Daily or weekly period, ending date, Branch, Cashier.
 
 ### 15.1.3 Sales by Product Report
 - **Description:** Details sales performance of individual products.
@@ -46,10 +46,10 @@ This section details the various reports available in the Water Station Manageme
 - **Key Metrics:** Date/Time, Product, Movement Type (Sale, Purchase, Production, Transfer In/Out, Adjustment, Write-off, Return), Quantity Delta, Reference (Transaction ID, Batch ID, Transfer ID).
 - **Filters:** Date Range, Branch, Product, Movement Type.
 
-### 15.2.3 Container Asset Status Report
-- **Description:** Tracks the status and location of all individually tagged containers.
-- **Key Metrics:** Container Tag ID, Product Type (e.g., 5-Gal Round), Status (In Stock, With Customer, With Rider, Damaged, Lost, Retired), Current Holder, Current Branch, Last Movement Date.
-- **Filters:** Status, Holder Type, Branch.
+### 15.2.3 Aggregate Gallon Inventory Report
+- **Description:** Summarizes the shop-owned gallon pool without requiring individual serial or QR tracking.
+- **Key Metrics:** Total Owned, At Shop, In Circulation, Damaged, Lost.
+- **Filters:** Branch.
 
 ### 15.2.4 Production Report
 - **Description:** Summarizes water purification production runs.

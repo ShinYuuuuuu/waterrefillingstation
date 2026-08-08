@@ -259,3 +259,41 @@ export const inventoryLedgerListQuerySchema = z.object({
     endDate: z.string().optional(),
   }),
 })
+
+// --- Inventory update request -------------------------------------------
+
+const INVENTORY_UPDATE_REQUEST_STATUS_VALUES = ['PENDING', 'APPROVED', 'REJECTED', 'RESOLVED'] as const
+const inventoryUpdateRequestStatusSchema = z.enum(INVENTORY_UPDATE_REQUEST_STATUS_VALUES)
+
+export const createInventoryUpdateRequestSchema = z.object({
+  productId: uuidString,
+  requestedQuantity: quantityField,
+  notes: z.string().optional(),
+})
+
+export const inventoryUpdateRequestIdSchema = z.object({
+  params: z.object({
+    requestId: uuidString,
+  }),
+})
+
+export const inventoryUpdateRequestListQuerySchema = z.object({
+  query: z.object({
+    page: z.coerce.number().int().min(1).optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+    status: inventoryUpdateRequestStatusSchema.optional(),
+    productId: uuidString.optional(),
+    search: z.string().optional(),
+  }),
+})
+
+export const reviewInventoryUpdateRequestSchema = z.object({
+  params: z.object({
+    requestId: uuidString,
+  }),
+  body: z.object({
+    status: z.enum(['APPROVED', 'REJECTED']),
+    approvedQuantity: quantityField.optional(),
+    notes: z.string().optional(),
+  }),
+})

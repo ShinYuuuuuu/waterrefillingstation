@@ -29,6 +29,11 @@ export const InventoryPermission = {
   // Adjustment
   ADJUST: 'inventory.adjust',
 
+  // Inventory update request workflow
+  UPDATE_REQUEST_CREATE: 'inventory.update_request.create',
+  UPDATE_REQUEST_READ: 'inventory.update_request.read',
+  UPDATE_REQUEST_APPROVE: 'inventory.update_request.approve',
+
   // Ledger & alerts (read-only)
   LEDGER_READ: 'inventory.ledger.read',
   ALERTS_READ: 'inventory.alerts.read',

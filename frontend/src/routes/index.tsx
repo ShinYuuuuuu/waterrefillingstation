@@ -8,12 +8,21 @@ import { DashboardRouter } from './dashboard-router'
 import { CustomersPage } from '@/pages/customers'
 import { ProductsPage } from '@/pages/products'
 import { InventoryPage } from '@/pages/inventory'
-import { GallonsPage } from '@/pages/gallons'
 import { SalesPage } from '@/pages/sales'
 import { DeliveriesPage } from '@/pages/deliveries'
-import { ReportsPage } from '@/pages/reports'
+import { RiderDeliveriesPage } from '@/pages/rider-deliveries'
+import { useAuthContext } from '@/contexts/auth-context'
+
+function DeliveriesRouter() {
+  const { user } = useAuthContext()
+  if (user?.role === 'rider') {
+    return <RiderDeliveriesPage />
+  }
+  return <DeliveriesPage />
+}
 import { SettingsPage } from '@/pages/settings'
 import { ProfilePage } from '@/pages/profile'
+import { ManageAccountsPage } from '@/pages/manage-accounts'
 import { UnauthorizedPage } from '@/pages/unauthorized'
 import { NotFoundPage } from '@/pages/not-found'
 import { ErrorPage } from '@/pages/error'
@@ -79,16 +88,6 @@ export const AppRoutes = createBrowserRouter([
     ),
   },
   {
-    path: '/gallons',
-    element: (
-      <ProtectedRoute requiredRoles={['owner', 'super_admin']}>
-        <DashboardLayout>
-          <GallonsPage />
-        </DashboardLayout>
-      </ProtectedRoute>
-    ),
-  },
-  {
     path: '/sales',
     element: (
       <ProtectedRoute requiredRoles={['owner', 'cashier', 'super_admin']}>
@@ -101,19 +100,9 @@ export const AppRoutes = createBrowserRouter([
   {
     path: '/deliveries',
     element: (
-      <ProtectedRoute requiredRoles={['owner', 'cashier', 'rider', 'super_admin']}>
+      <ProtectedRoute requiredRoles={['cashier', 'rider']}>
         <DashboardLayout>
-          <DeliveriesPage />
-        </DashboardLayout>
-      </ProtectedRoute>
-    ),
-  },
-  {
-    path: '/reports',
-    element: (
-      <ProtectedRoute requiredRoles={['owner', 'super_admin']}>
-        <DashboardLayout>
-          <ReportsPage />
+          <DeliveriesRouter />
         </DashboardLayout>
       </ProtectedRoute>
     ),
@@ -135,6 +124,14 @@ export const AppRoutes = createBrowserRouter([
         <DashboardLayout>
           <ProfilePage />
         </DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/manage-accounts',
+    element: (
+      <ProtectedRoute requiredRoles={['owner', 'super_admin']}>
+        <DashboardLayout><ManageAccountsPage /></DashboardLayout>
       </ProtectedRoute>
     ),
   },

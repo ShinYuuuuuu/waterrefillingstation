@@ -16,7 +16,7 @@ const TENANT_ID = '550e8400-e29b-41d4-a716-446655470000'
 const BRANCH_ID = '550e8400-e29b-41d4-a716-446655470001'
 const OTHER_BRANCH_ID = '550e8400-e29b-41d4-a716-446655470002'
 
-const TRUNCATE_SQL = `TRUNCATE TABLE "branch_inventory", "inventory_ledger", "production_batches", "stock_transfers", "stock_transfer_items", "stock_count_sessions", "stock_count_items", "audit_logs", "products", "product_categories", "tenants", "branches", "users" CASCADE`
+const TRUNCATE_SQL = `TRUNCATE TABLE "inventory_update_requests", "branch_inventory", "inventory_ledger", "production_batches", "stock_transfers", "stock_transfer_items", "stock_count_sessions", "stock_count_items", "audit_logs", "products", "product_categories", "tenants", "branches", "users" CASCADE`
 
 function createTestApp() {
   const app = express()
@@ -887,6 +887,97 @@ describe('InventoryController', () => {
 
       expect(res.status).toBe(404)
       expect(res.body.error.message).toBe('StockTransfer not found')
+    })
+  })
+
+  describe('POST /inventory/update-requests', () => {
+    it('should create a pending inventory update request', async () => {
+      await request(app).post('/inventory/branch').send({
+        productId: '550e8400-e29b-41d4-a716-446655470003',
+        quantityOnHand: 10,
+      })
+
+      const res = await request(app).post('/inventory/update-requests').send({
+        productId: '550e8400-e29b-41d4-a716-446655470003',
+        requestedQuantity: 6,
+        notes: 'Used filters today',
+      })
+
+      expect(res.status).toBe(201)
+      expect(res.body.data.status).toBe('PENDING')
+      expect(res.body.data.previous_quantity).toBe(10)
+      expect(res.body.data.requested_quantity).toBe(6)
+      expect(res.body.data.requested_by).toBe('test-user')
+    })
+  })
+
+  describe('GET /inventory/update-requests', () => {
+    it('should list inventory update requests', async () => {
+      await request(app).post('/inventory/branch').send({
+        productId: '550e8400-e29b-41d4-a716-446655470003',
+        quantityOnHand: 10,
+      })
+      await request(app).post('/inventory/update-requests').send({
+        productId: '550e8400-e29b-41d4-a716-446655470003',
+        requestedQuantity: 6,
+      })
+
+      const res = await request(app).get('/inventory/update-requests')
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.length).toBeGreaterThanOrEqual(1)
+      expect(res.body.data.some((r: any) => r.status === 'PENDING')).toBe(true)
+    })
+  })
+
+  describe('POST /inventory/update-requests/{requestId}/approve', () => {
+    it('should approve request and update inventory quantity', async () => {
+      await request(app).post('/inventory/branch').send({
+        productId: '550e8400-e29b-41d4-a716-446655470003',
+        quantityOnHand: 10,
+      })
+      const createRes = await request(app).post('/inventory/update-requests').send({
+        productId: '550e8400-e29b-41d4-a716-446655470003',
+        requestedQuantity: 6,
+      })
+
+      const res = await request(app).post(`/inventory/update-requests/${createRes.body.data.id}/approve`).send({
+        status: 'APPROVED',
+        approvedQuantity: 6,
+      })
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.status).toBe('APPROVED')
+      expect(res.body.data.approved_quantity).toBe(6)
+
+      const inventoryRes = await request(app).get('/inventory/branch')
+      const item = inventoryRes.body.data.find((i: any) => i.productId === '550e8400-e29b-41d4-a716-446655470003')
+      expect(item.quantityOnHand).toBe(6)
+    })
+  })
+
+  describe('POST /inventory/update-requests/{requestId}/reject', () => {
+    it('should reject request without changing inventory quantity', async () => {
+      await request(app).post('/inventory/branch').send({
+        productId: '550e8400-e29b-41d4-a716-446655470003',
+        quantityOnHand: 10,
+      })
+      const createRes = await request(app).post('/inventory/update-requests').send({
+        productId: '550e8400-e29b-41d4-a716-446655470003',
+        requestedQuantity: 6,
+      })
+
+      const res = await request(app).post(`/inventory/update-requests/${createRes.body.data.id}/reject`).send({
+        status: 'REJECTED',
+        notes: 'Count seems off',
+      })
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.status).toBe('REJECTED')
+
+      const inventoryRes = await request(app).get('/inventory/branch')
+      const item = inventoryRes.body.data.find((i: any) => i.productId === '550e8400-e29b-41d4-a716-446655470003')
+      expect(item.quantityOnHand).toBe(10)
     })
   })
 })

@@ -51,4 +51,19 @@ export const productService = {
   async remove(id: string): Promise<void> {
     await apiClient.delete(`${BASE}/${id}`)
   },
+
+  async archive(id: string): Promise<Product> {
+    const response = await apiClient.post<ApiResponse<Product>>(`${BASE}/${id}/archive`)
+    return response.data.data
+  },
+
+  async reactivate(id: string): Promise<Product> {
+    const response = await apiClient.post<ApiResponse<Product>>(`${BASE}/${id}/reactivate`)
+    return response.data.data
+  },
+
+  async canDelete(id: string): Promise<{ canDelete: boolean; reason?: string }> {
+    const response = await apiClient.get<ApiResponse<{ canDelete: boolean; reason?: string }>>(`${BASE}/${id}/can-delete`)
+    return response.data.data
+  },
 }

@@ -55,9 +55,9 @@ Each requirement has a unique ID: `FR-<Module>-<Number>`. Priority: **M**ust, **
 
 | ID | Requirement | Priority |
 |---|---|---|
-| FR-INV-01 | System shall maintain a product catalog (finished goods, containers, raw materials, accessories) with SKU, pricing, unit of measure. | M |
+| FR-INV-01 | Owner shall maintain a simplified catalog of water products and services with SKU, unit price, and unit of measure; quantities are entered on sale lines. | M |
 | FR-INV-02 | System shall track stock levels per branch/warehouse with automatic deduction on sale and addition on production/purchase. | M |
-| FR-INV-03 | System shall track individual containers by unique tag/QR code including current holder (station, customer, rider, reseller) and status (in stock, with customer, damaged, lost, retired). | M |
+| FR-INV-03 | System shall track shop-owned gallons as aggregate totals: total owned, at shop, in circulation, damaged, and lost; individual tag/QR tracking is not required. | M |
 | FR-INV-04 | System shall record production batches (raw water input, output filled containers, batch date, operator, quality check result). | S |
 | FR-INV-05 | System shall alert when stock falls below a configurable reorder threshold. | M |
 | FR-INV-06 | System shall support stock transfer requests/approvals between branches/warehouses. | S |

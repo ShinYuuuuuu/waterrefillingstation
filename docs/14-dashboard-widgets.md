@@ -36,6 +36,8 @@ This section specifies the various dashboard widgets available to different user
     - **Description:** Critical system-level alerts (e.g., backup failures, sync errors, integration issues).
     - **Metrics:** Alert message, timestamp, severity.
 
+The owner dashboard is informational and does not expose POS quick actions. Sales are processed from cashier accounts. Recent sales and low-inventory items are shown directly on the owner dashboard.
+
 ## 14.2 Branch Manager Dashboard
 
 - **Branch Sales Performance:**

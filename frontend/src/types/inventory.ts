@@ -25,6 +25,12 @@ export interface InventoryListResponse {
   }
 }
 
+export interface CreateInventoryRequest {
+  productId: string
+  quantityOnHand: number
+  reservedQuantity?: number
+}
+
 export interface LowStockAlert {
   productId: string
   productName: string
@@ -112,4 +118,55 @@ export interface LedgerListQuery {
   productId?: string
   startDate?: string
   endDate?: string
+}
+
+export interface InventoryUpdateRequest {
+  id: string
+  tenantId: string
+  branchId: string
+  productId: string
+  productName?: string
+  productSku?: string
+  requestedBy: string
+  requestedByName?: string
+  approvedBy: string | null
+  approvedByName?: string | null
+  previousQuantity: number
+  requestedQuantity: number
+  approvedQuantity: number | null
+  notes: string | null
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'RESOLVED'
+  reviewedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface InventoryUpdateRequestListResponse {
+  data: InventoryUpdateRequest[]
+  meta: {
+    page: number
+    limit: number
+    total: number
+    totalPages: number
+  }
+}
+
+export interface CreateInventoryUpdateRequest {
+  productId: string
+  requestedQuantity: number
+  notes?: string | null
+}
+
+export interface ReviewInventoryUpdateRequest {
+  status: 'APPROVED' | 'REJECTED'
+  approvedQuantity?: number | null
+  notes?: string | null
+}
+
+export interface InventoryUpdateRequestListQuery {
+  page?: number
+  limit?: number
+  status?: string
+  productId?: string
+  search?: string
 }

@@ -34,6 +34,9 @@ export type StockTransferStatus =
 /** Matches the workflow specified in the task brief. */
 export type StockCountStatus = 'OPEN' | 'SUBMITTED' | 'APPROVED' | 'REJECTED'
 
+/** Status for cashier inventory update requests. */
+export type InventoryUpdateRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'RESOLVED'
+
 /** Reasons for an inventory adjustment. */
 export type AdjustmentReason =
   | 'DAMAGE'
@@ -425,4 +428,42 @@ export interface ProductionBatchListQuery {
 
 export interface LowStockAlertQuery {
   branchId?: string
+}
+
+export interface InventoryUpdateRequest {
+  id: string
+  tenant_id: string
+  branch_id: string
+  product_id: string
+  requested_by: string
+  approved_by: string | null
+  previous_quantity: number
+  requested_quantity: number
+  approved_quantity: number | null
+  notes: string | null
+  status: InventoryUpdateRequestStatus
+  reviewed_at: Date | null
+  created_at: Date
+  updated_at: Date
+  deleted_at: Date | null
+}
+
+export interface CreateInventoryUpdateRequest {
+  productId: string
+  requestedQuantity: number
+  notes?: string | null
+}
+
+export interface ReviewInventoryUpdateRequest {
+  status: 'APPROVED' | 'REJECTED'
+  approvedQuantity?: number | null
+  notes?: string | null
+}
+
+export interface InventoryUpdateRequestListQuery {
+  page?: number
+  limit?: number
+  status?: string
+  productId?: string
+  search?: string
 }

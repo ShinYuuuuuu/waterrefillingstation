@@ -8,6 +8,7 @@ import {
   updateCustomerSchema,
   customerIdSchema,
   customerListQuerySchema,
+  customerPurchaseQuerySchema,
 } from './customer.schema'
 
 /**
@@ -50,6 +51,23 @@ customerRoutes.get(
   requirePermission(CustomerPermission.READ),
   validateRequest(customerIdSchema),
   customerController.getOne,
+)
+
+// GET /customers/:customerId/purchase-summary — retrieve purchase summary.
+customerRoutes.get(
+  '/:customerId/purchase-summary',
+  requirePermission(CustomerPermission.READ),
+  validateRequest(customerIdSchema),
+  customerController.getPurchaseSummary,
+)
+
+// GET /customers/:customerId/sales — retrieve customer sales history.
+customerRoutes.get(
+  '/:customerId/sales',
+  requirePermission(CustomerPermission.READ),
+  validateRequest(customerIdSchema),
+  validateRequest(customerPurchaseQuerySchema),
+  customerController.getSalesHistory,
 )
 
 // PUT /customers/:customerId — update customer details.

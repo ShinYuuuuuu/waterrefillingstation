@@ -80,6 +80,33 @@ export const productIdSchema = z.object({
 })
 
 /**
+ * Param-only schema for `POST /products/:productId/archive`.
+ */
+export const archiveProductSchema = z.object({
+  params: z.object({
+    productId: z.string().uuid('Invalid product ID'),
+  }),
+})
+
+/**
+ * Param-only schema for `POST /products/:productId/reactivate`.
+ */
+export const reactivateProductSchema = z.object({
+  params: z.object({
+    productId: z.string().uuid('Invalid product ID'),
+  }),
+})
+
+/**
+ * Param-only schema for `GET /products/:productId/can-delete`.
+ */
+export const canDeleteProductSchema = z.object({
+  params: z.object({
+    productId: z.string().uuid('Invalid product ID'),
+  }),
+})
+
+/**
  * Query schema for `GET /products`.
  */
 export const productListQuerySchema = z.object({

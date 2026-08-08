@@ -24,6 +24,10 @@ import {
   InventoryAdjustmentResponse,
   InventoryAdjustmentListQuery,
   AdjustmentReason,
+  InventoryUpdateRequest,
+  InventoryUpdateRequestStatus,
+  CreateInventoryUpdateRequest,
+  InventoryUpdateRequestListQuery,
 } from './inventory.types'
 import { InventoryMapper } from './inventory.mapper'
 
@@ -63,7 +67,9 @@ export class InventoryRepository {
     query: BranchInventoryListQuery,
     ctx: InventoryContext,
   ): Promise<{ data: (BranchInventory & { product?: { name: string; reorder_level: number; sku: string } })[]; total: number }> {
-    const where = this.buildScopeWhere(ctx)
+    const where = this.buildScopeWhere(ctx, {
+      product: { is_active: true, deleted_at: null },
+    })
 
     if (query.productId) {
       ;(where as Record<string, unknown>).product_id = query.productId
@@ -212,6 +218,7 @@ export class InventoryRepository {
     const where: Record<string, unknown> = {
       tenant_id: ctx.tenantId,
       deleted_at: null,
+      product: { is_active: true, deleted_at: null },
     }
     if (branchId) {
       ;(where as Record<string, unknown>).branch_id = branchId
@@ -1043,6 +1050,169 @@ export class InventoryRepository {
         },
       })
     })
+  }
+
+  // =======================================================================
+  // INVENTORY UPDATE REQUESTS
+  // =======================================================================
+
+  async createInventoryUpdateRequest(data: CreateInventoryUpdateRequest, ctx: InventoryContext): Promise<InventoryUpdateRequest> {
+    const branchId = ctx.branchId
+    if (!branchId) {
+      throw new NotFoundError('Branch')
+    }
+
+    const inventory = await this.db.branchInventory.findFirst({
+      where: this.buildScopeWhere(ctx, { product_id: data.productId }),
+    })
+
+    if (!inventory) {
+      throw new NotFoundError('BranchInventory')
+    }
+
+    return this.db.inventoryUpdateRequest.create({
+      data: {
+        tenant_id: ctx.tenantId,
+        branch_id: branchId,
+        product_id: data.productId,
+        requested_by: ctx.userId,
+        previous_quantity: inventory.quantity_on_hand,
+        requested_quantity: data.requestedQuantity,
+        notes: data.notes ?? null,
+        status: 'PENDING',
+      },
+    })
+  }
+
+  async findInventoryUpdateRequest(id: string, ctx: InventoryContext): Promise<InventoryUpdateRequest | null> {
+    return this.db.inventoryUpdateRequest.findFirst({
+      where: this.buildScopeWhere(ctx, { id }),
+    })
+  }
+
+  async findManyInventoryUpdateRequests(
+    query: InventoryUpdateRequestListQuery,
+    ctx: InventoryContext,
+  ): Promise<{ data: InventoryUpdateRequest[]; total: number }> {
+    const where = this.buildScopeWhere(ctx)
+
+    if (query.status) {
+      ;(where as Record<string, unknown>).status = query.status as InventoryUpdateRequestStatus
+    }
+    if (query.productId) {
+      ;(where as Record<string, unknown>).product_id = query.productId
+    }
+    if (query.search) {
+      ;(where as Record<string, unknown>).OR = [
+        { product: { name: { contains: query.search, mode: 'insensitive' } } },
+        { product: { sku: { contains: query.search, mode: 'insensitive' } } },
+      ]
+    }
+
+    const page = query.page ?? 1
+    const limit = query.limit ?? 20
+    const skip = (page - 1) * limit
+
+    const [total, data] = await this.db.$transaction([
+      this.db.inventoryUpdateRequest.count({ where }),
+      this.db.inventoryUpdateRequest.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { created_at: 'desc' },
+        include: {
+          product: { select: { name: true, sku: true } },
+          branch: { select: { name: true } },
+        },
+      }),
+    ])
+
+    return { data, total }
+  }
+
+  async approveInventoryUpdateRequest(id: string, ctx: InventoryContext, approvedQuantity: number, notes?: string | null): Promise<InventoryUpdateRequest> {
+    const existing = await this.findInventoryUpdateRequest(id, ctx)
+    if (!existing) {
+      throw new NotFoundError('InventoryUpdateRequest')
+    }
+    if (existing.status !== 'PENDING') {
+      throw new NotFoundError('InventoryUpdateRequest')
+    }
+
+    const branchId = existing.branch_id
+    const productId = existing.product_id
+    const delta = approvedQuantity - existing.previous_quantity
+
+    const branchInventory = await this.db.branchInventory.findFirst({
+      where: this.buildScopeWhere({ tenantId: ctx.tenantId, branchId, userId: ctx.userId }, { product_id: productId }),
+    })
+
+    if (!branchInventory) {
+      throw new NotFoundError('BranchInventory')
+    }
+
+    await this.db.$transaction(async (tx: any) => {
+      // Update branch inventory
+      await tx.branchInventory.update({
+        where: { id: branchInventory.id },
+        data: {
+          quantity_on_hand: approvedQuantity,
+          last_counted_at: new Date(),
+          updated_at: new Date(),
+        },
+      })
+
+      // Create ledger entry
+      await tx.inventoryLedger.create({
+        data: {
+          tenant_id: ctx.tenantId,
+          branch_id: branchId,
+          product_id: productId,
+          movement_type: 'ADJUSTMENT',
+          quantity_delta: delta,
+          reference_type: 'INVENTORY_UPDATE_REQUEST',
+          reference_id: id,
+          notes: notes ?? existing.notes,
+          created_by: ctx.userId,
+        },
+      })
+
+      // Update request status
+      await tx.inventoryUpdateRequest.update({
+        where: { id },
+        data: {
+          status: 'APPROVED',
+          approved_by: ctx.userId,
+          approved_quantity: approvedQuantity,
+          reviewed_at: new Date(),
+          notes: notes ?? existing.notes,
+        },
+      })
+    })
+
+    return this.findInventoryUpdateRequest(id, ctx) as Promise<InventoryUpdateRequest>
+  }
+
+  async rejectInventoryUpdateRequest(id: string, ctx: InventoryContext, notes?: string | null): Promise<InventoryUpdateRequest> {
+    const existing = await this.findInventoryUpdateRequest(id, ctx)
+    if (!existing) {
+      throw new NotFoundError('InventoryUpdateRequest')
+    }
+    if (existing.status !== 'PENDING') {
+      throw new NotFoundError('InventoryUpdateRequest')
+    }
+
+    await this.db.inventoryUpdateRequest.update({
+      where: { id },
+      data: {
+        status: 'REJECTED',
+        approved_by: ctx.userId,
+        reviewed_at: new Date(),
+        notes: notes ?? existing.notes,
+      },
+    })
+
+    return this.findInventoryUpdateRequest(id, ctx) as Promise<InventoryUpdateRequest>
   }
 }
 

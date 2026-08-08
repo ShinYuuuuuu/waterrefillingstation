@@ -60,7 +60,7 @@ export interface SalePayment {
   id: string
   sale_id: string
   amount: number
-  method: PaymentMethod
+  payment_method: PaymentMethod
   reference: string | null
   created_at: Date
 }
@@ -128,6 +128,8 @@ export interface SaleResponse {
   voidedBy: string | null
   notes: string | null
   createdBy: string
+  cashierName: string
+  customerName: string
   createdAt: string
   updatedAt: string
   items: SaleItemResponse[]
@@ -217,4 +219,5 @@ export interface SaleContext {
   tenantId: string
   branchId: string | null
   userId: string
+  userRole?: string
 }

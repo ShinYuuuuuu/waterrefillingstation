@@ -23,6 +23,10 @@ import {
   inventoryAdjustmentListQuerySchema,
   inventoryLedgerIdSchema,
   inventoryLedgerListQuerySchema,
+  createInventoryUpdateRequestSchema,
+  inventoryUpdateRequestIdSchema,
+  inventoryUpdateRequestListQuerySchema,
+  reviewInventoryUpdateRequestSchema,
 } from './inventory.schema'
 
 /**
@@ -230,6 +234,45 @@ inventoryRoutes.post(
   requirePermission(InventoryPermission.ADJUST),
   validateBody(createInventoryAdjustmentSchema),
   inventoryController.createAdjustment,
+)
+
+// =========================================================================
+// INVENTORY UPDATE REQUESTS
+// =========================================================================
+
+inventoryRoutes.post(
+  '/update-requests',
+  requirePermission(InventoryPermission.UPDATE_REQUEST_CREATE),
+  validateBody(createInventoryUpdateRequestSchema),
+  inventoryController.createUpdateRequest,
+)
+
+inventoryRoutes.get(
+  '/update-requests',
+  requirePermission(InventoryPermission.UPDATE_REQUEST_READ),
+  validateRequest(inventoryUpdateRequestListQuerySchema),
+  inventoryController.listUpdateRequests,
+)
+
+inventoryRoutes.get(
+  '/update-requests/:requestId',
+  requirePermission(InventoryPermission.UPDATE_REQUEST_READ),
+  validateRequest(inventoryUpdateRequestIdSchema),
+  inventoryController.getUpdateRequest,
+)
+
+inventoryRoutes.post(
+  '/update-requests/:requestId/approve',
+  requirePermission(InventoryPermission.UPDATE_REQUEST_APPROVE),
+  validateRequest(reviewInventoryUpdateRequestSchema),
+  inventoryController.approveUpdateRequest,
+)
+
+inventoryRoutes.post(
+  '/update-requests/:requestId/reject',
+  requirePermission(InventoryPermission.UPDATE_REQUEST_APPROVE),
+  validateRequest(reviewInventoryUpdateRequestSchema),
+  inventoryController.rejectUpdateRequest,
 )
 
 export default inventoryRoutes

@@ -8,6 +8,8 @@ import {
   UpdateCustomerRequest,
   CustomerListQuery,
   CustomerContext,
+  CustomerPurchaseSummary,
+  CustomerSalesHistoryResponse,
 } from './customer.types'
 
 /**
@@ -65,6 +67,31 @@ export const customerController = {
 
       const result = await customerService.getCustomer(customerId, ctx)
       return res.status(httpStatus.OK).json(successResponse(result))
+    } catch (error) {
+      next(error)
+    }
+  },
+
+  async getPurchaseSummary(req: Request, res: Response, next: NextFunction) {
+    try {
+      const ctx = buildContext(req)
+      const { customerId } = req.validatedParams as { customerId: string }
+
+      const result = await customerService.getCustomerPurchaseSummary(customerId, ctx)
+      return res.status(httpStatus.OK).json(successResponse(result))
+    } catch (error) {
+      next(error)
+    }
+  },
+
+  async getSalesHistory(req: Request, res: Response, next: NextFunction) {
+    try {
+      const ctx = buildContext(req)
+      const { customerId } = req.validatedParams as { customerId: string }
+      const query = req.validatedQuery as CustomerListQuery
+
+      const result = await customerService.getCustomerSalesHistory(customerId, query, ctx)
+      return res.status(httpStatus.OK).json(successResponse(result.data, result.meta))
     } catch (error) {
       next(error)
     }

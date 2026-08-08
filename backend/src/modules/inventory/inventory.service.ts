@@ -34,6 +34,10 @@ import {
   StockTransferItem,
   AdjustmentReason,
   LowStockAlertResponse,
+  InventoryUpdateRequest,
+  InventoryUpdateRequestStatus,
+  CreateInventoryUpdateRequest,
+  InventoryUpdateRequestListQuery,
 } from './inventory.types'
 import { InventoryMapper } from './inventory.mapper'
 import { InventoryRepository, inventoryRepository } from './inventory.repository'
@@ -863,6 +867,95 @@ export class InventoryService {
         createdAt: item.created_at.toISOString(),
       })),
     }
+  }
+
+  // =======================================================================
+  // INVENTORY UPDATE REQUESTS
+  // =======================================================================
+
+  async createInventoryUpdateRequest(data: CreateInventoryUpdateRequest, ctx: InventoryContext): Promise<InventoryUpdateRequest> {
+    const request = await this.repository.createInventoryUpdateRequest(data, ctx)
+
+    await this.logAudit({
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      action: 'CREATE',
+      entityType: 'InventoryUpdateRequest',
+      entityId: request.id,
+      afterData: request,
+    })
+
+    return request
+  }
+
+  async getInventoryUpdateRequest(id: string, ctx: InventoryContext): Promise<InventoryUpdateRequest> {
+    const request = await this.repository.findInventoryUpdateRequest(id, ctx)
+    if (!request) {
+      throw new NotFoundError('InventoryUpdateRequest')
+    }
+    return request
+  }
+
+  async listInventoryUpdateRequests(query: InventoryUpdateRequestListQuery, ctx: InventoryContext): Promise<{ data: InventoryUpdateRequest[]; meta: { page: number; limit: number; total: number; totalPages: number } }> {
+    const page = query.page ?? pagination.DEFAULT_PAGE
+    const limit = Math.min(query.limit ?? pagination.DEFAULT_LIMIT, pagination.MAX_LIMIT)
+
+    const { data, total } = await this.repository.findManyInventoryUpdateRequests(
+      { ...query, page, limit },
+      ctx,
+    )
+
+    return {
+      data,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    }
+  }
+
+  async approveInventoryUpdateRequest(id: string, ctx: InventoryContext, approvedQuantity: number, notes?: string | null): Promise<InventoryUpdateRequest> {
+    const existing = await this.repository.findInventoryUpdateRequest(id, ctx)
+    if (!existing) {
+      throw new NotFoundError('InventoryUpdateRequest')
+    }
+
+    const approved = await this.repository.approveInventoryUpdateRequest(id, ctx, approvedQuantity, notes)
+
+    await this.logAudit({
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      action: 'APPROVE',
+      entityType: 'InventoryUpdateRequest',
+      entityId: id,
+      beforeData: existing,
+      afterData: approved,
+    })
+
+    return approved
+  }
+
+  async rejectInventoryUpdateRequest(id: string, ctx: InventoryContext, notes?: string | null): Promise<InventoryUpdateRequest> {
+    const existing = await this.repository.findInventoryUpdateRequest(id, ctx)
+    if (!existing) {
+      throw new NotFoundError('InventoryUpdateRequest')
+    }
+
+    const rejected = await this.repository.rejectInventoryUpdateRequest(id, ctx, notes)
+
+    await this.logAudit({
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      action: 'REJECT',
+      entityType: 'InventoryUpdateRequest',
+      entityId: id,
+      beforeData: existing,
+      afterData: rejected,
+    })
+
+    return rejected
   }
 
   // =======================================================================

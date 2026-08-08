@@ -8,6 +8,9 @@ import {
   updateProductSchema,
   productIdSchema,
   productListQuerySchema,
+  archiveProductSchema,
+  reactivateProductSchema,
+  canDeleteProductSchema,
 } from './product.schema'
 
 /**
@@ -58,6 +61,30 @@ productRoutes.put(
   requirePermission(ProductPermission.UPDATE),
   validateRequest(updateProductSchema),
   productController.update,
+)
+
+// POST /products/:productId/archive — archive a product.
+productRoutes.post(
+  '/:productId/archive',
+  requirePermission(ProductPermission.ARCHIVE),
+  validateRequest(archiveProductSchema),
+  productController.archive,
+)
+
+// POST /products/:productId/reactivate — reactivate an archived product.
+productRoutes.post(
+  '/:productId/reactivate',
+  requirePermission(ProductPermission.REACTIVATE),
+  validateRequest(reactivateProductSchema),
+  productController.reactivate,
+)
+
+// GET /products/:productId/can-delete — check if product can be safely deleted.
+productRoutes.get(
+  '/:productId/can-delete',
+  requirePermission(ProductPermission.DELETE),
+  validateRequest(canDeleteProductSchema),
+  productController.canDelete,
 )
 
 // DELETE /products/:productId — soft-delete (deactivates the product).

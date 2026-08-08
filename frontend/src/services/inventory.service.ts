@@ -10,6 +10,11 @@ import type {
   AdjustmentRequest,
   InventoryListQuery,
   LedgerListQuery,
+  InventoryUpdateRequest,
+  InventoryUpdateRequestListResponse,
+  InventoryUpdateRequestListQuery,
+  CreateInventoryUpdateRequest,
+  CreateInventoryRequest,
 } from '@/types/inventory'
 
 interface ApiMeta {
@@ -66,6 +71,12 @@ function toLedgerEntry(raw: any): LedgerEntry {
 }
 
 export const inventoryService = {
+  async createBranchInventory(payload: CreateInventoryRequest): Promise<InventoryItem> {
+    const response = await apiClient.post<ApiResponse<any>>(`${API_ENDPOINTS.INVENTORY}/branch`, payload)
+    const raw = response.data.data
+    return toInventoryItem(raw, raw.product?.name, raw.product?.sku)
+  },
+
   async listBranchInventory(query?: InventoryListQuery): Promise<InventoryListResponse> {
     const params: Record<string, unknown> = {}
     if (query?.page) params.page = query.page
@@ -215,6 +226,126 @@ export const inventoryService = {
         approvedBy: item.approved_by ?? item.approvedBy ?? null,
         createdAt: item.created_at ?? item.createdAt,
       })),
+    }
+  },
+
+  async createInventoryUpdateRequest(payload: CreateInventoryUpdateRequest): Promise<InventoryUpdateRequest> {
+    const response = await apiClient.post<ApiResponse<any>>(`${API_ENDPOINTS.INVENTORY}/update-requests`, payload)
+    const raw = response.data.data
+    return {
+      id: raw.id,
+      tenantId: raw.tenant_id ?? raw.tenantId,
+      branchId: raw.branch_id ?? raw.branchId,
+      productId: raw.product_id ?? raw.productId,
+      productName: raw.product?.name ?? raw.productName,
+      productSku: raw.product?.sku ?? raw.productSku,
+      requestedBy: raw.requested_by ?? raw.requestedBy,
+      requestedByName: raw.requested_by_user?.name ?? raw.requestedByName,
+      approvedBy: raw.approved_by ?? raw.approvedBy,
+      approvedByName: raw.approved_by_user?.name ?? raw.approvedByName,
+      previousQuantity: Number(raw.previous_quantity ?? raw.previousQuantity ?? 0),
+      requestedQuantity: Number(raw.requested_quantity ?? raw.requestedQuantity ?? 0),
+      approvedQuantity: raw.approved_quantity != null ? Number(raw.approved_quantity ?? raw.approvedQuantity) : null,
+      notes: raw.notes ?? raw.notes ?? null,
+      status: raw.status,
+      reviewedAt: raw.reviewed_at ?? raw.reviewedAt ?? null,
+      createdAt: raw.created_at ?? raw.createdAt,
+      updatedAt: raw.updated_at ?? raw.updatedAt,
+    }
+  },
+
+  async listInventoryUpdateRequests(query?: InventoryUpdateRequestListQuery): Promise<InventoryUpdateRequestListResponse> {
+    const params: Record<string, unknown> = {}
+    if (query?.page) params.page = query.page
+    if (query?.limit) params.limit = query.limit
+    if (query?.status) params.status = query.status
+    if (query?.productId) params.productId = query.productId
+    if (query?.search) params.search = query.search
+
+    const response = await apiClient.get<ApiResponse<any[]>>(`${API_ENDPOINTS.INVENTORY}/update-requests`, { params })
+    const items = (response.data.data ?? []).map((raw: any) => ({
+      id: raw.id,
+      tenantId: raw.tenant_id ?? raw.tenantId,
+      branchId: raw.branch_id ?? raw.branchId,
+      productId: raw.product_id ?? raw.productId,
+      productName: raw.product?.name ?? raw.productName,
+      productSku: raw.product?.sku ?? raw.productSku,
+      requestedBy: raw.requested_by ?? raw.requestedBy,
+      requestedByName: raw.requested_by_user?.name ?? raw.requestedByName,
+      approvedBy: raw.approved_by ?? raw.approvedBy,
+      approvedByName: raw.approved_by_user?.name ?? raw.approvedByName,
+      previousQuantity: Number(raw.previous_quantity ?? raw.previousQuantity ?? 0),
+      requestedQuantity: Number(raw.requested_quantity ?? raw.requestedQuantity ?? 0),
+      approvedQuantity: raw.approved_quantity != null ? Number(raw.approved_quantity ?? raw.approvedQuantity) : null,
+      notes: raw.notes ?? raw.notes ?? null,
+      status: raw.status,
+      reviewedAt: raw.reviewed_at ?? raw.reviewedAt ?? null,
+      createdAt: raw.created_at ?? raw.createdAt,
+      updatedAt: raw.updated_at ?? raw.updatedAt,
+    }))
+    const meta = response.data.meta ?? {
+      page: query?.page ?? 1,
+      limit: query?.limit ?? 20,
+      total: items.length,
+      totalPages: 1,
+    }
+    return { data: items, meta }
+  },
+
+  async approveInventoryUpdateRequest(requestId: string, approvedQuantity: number, notes?: string | null): Promise<InventoryUpdateRequest> {
+    const response = await apiClient.post<ApiResponse<any>>(`${API_ENDPOINTS.INVENTORY}/update-requests/${requestId}/approve`, {
+      status: 'APPROVED',
+      approvedQuantity,
+      notes,
+    })
+    const raw = response.data.data
+    return {
+      id: raw.id,
+      tenantId: raw.tenant_id ?? raw.tenantId,
+      branchId: raw.branch_id ?? raw.branchId,
+      productId: raw.product_id ?? raw.productId,
+      productName: raw.product?.name ?? raw.productName,
+      productSku: raw.product?.sku ?? raw.productSku,
+      requestedBy: raw.requested_by ?? raw.requestedBy,
+      requestedByName: raw.requested_by_user?.name ?? raw.requestedByName,
+      approvedBy: raw.approved_by ?? raw.approvedBy,
+      approvedByName: raw.approved_by_user?.name ?? raw.approvedByName,
+      previousQuantity: Number(raw.previous_quantity ?? raw.previousQuantity ?? 0),
+      requestedQuantity: Number(raw.requested_quantity ?? raw.requestedQuantity ?? 0),
+      approvedQuantity: raw.approved_quantity != null ? Number(raw.approved_quantity ?? raw.approvedQuantity) : null,
+      notes: raw.notes ?? raw.notes ?? null,
+      status: raw.status,
+      reviewedAt: raw.reviewed_at ?? raw.reviewedAt ?? null,
+      createdAt: raw.created_at ?? raw.createdAt,
+      updatedAt: raw.updated_at ?? raw.updatedAt,
+    }
+  },
+
+  async rejectInventoryUpdateRequest(requestId: string, notes?: string | null): Promise<InventoryUpdateRequest> {
+    const response = await apiClient.post<ApiResponse<any>>(`${API_ENDPOINTS.INVENTORY}/update-requests/${requestId}/reject`, {
+      status: 'REJECTED',
+      notes,
+    })
+    const raw = response.data.data
+    return {
+      id: raw.id,
+      tenantId: raw.tenant_id ?? raw.tenantId,
+      branchId: raw.branch_id ?? raw.branchId,
+      productId: raw.product_id ?? raw.productId,
+      productName: raw.product?.name ?? raw.productName,
+      productSku: raw.product?.sku ?? raw.productSku,
+      requestedBy: raw.requested_by ?? raw.requestedBy,
+      requestedByName: raw.requested_by_user?.name ?? raw.requestedByName,
+      approvedBy: raw.approved_by ?? raw.approvedBy,
+      approvedByName: raw.approved_by_user?.name ?? raw.approvedByName,
+      previousQuantity: Number(raw.previous_quantity ?? raw.previousQuantity ?? 0),
+      requestedQuantity: Number(raw.requested_quantity ?? raw.requestedQuantity ?? 0),
+      approvedQuantity: raw.approved_quantity != null ? Number(raw.approved_quantity ?? raw.approvedQuantity) : null,
+      notes: raw.notes ?? raw.notes ?? null,
+      status: raw.status,
+      reviewedAt: raw.reviewed_at ?? raw.reviewedAt ?? null,
+      createdAt: raw.created_at ?? raw.createdAt,
+      updatedAt: raw.updated_at ?? raw.updatedAt,
     }
   },
 }

@@ -188,6 +188,59 @@ export class ProductRepository {
     })
   }
 
+  /**
+   * Archive a product by setting `is_active = false`.
+   *
+   * This preserves all historical data (inventory, sales, etc.) while
+   * removing the product from active sale flows.
+   *
+   * @param id     The product's primary key.
+   * @param ctx    Tenant context.
+   * @returns      The archived product entity.
+   * @throws       NotFoundError if the product does not exist or is soft-deleted.
+   */
+  async archive(id: string, ctx: ProductContext): Promise<Product> {
+    logger.debug('Archiving product record', { id, tenantId: ctx.tenantId })
+
+    const existing = await this.findUnique(id, ctx)
+    if (!existing) {
+      throw new NotFoundError('Product')
+    }
+
+    return this.db.product.update({
+      where: { id },
+      data: {
+        is_active: false,
+        updated_at: new Date(),
+      },
+    })
+  }
+
+  /**
+   * Reactivate an archived product by setting `is_active = true`.
+   *
+   * @param id     The product's primary key.
+   * @param ctx    Tenant context.
+   * @returns      The reactivated product entity.
+   * @throws       NotFoundError if the product does not exist or is soft-deleted.
+   */
+  async reactivate(id: string, ctx: ProductContext): Promise<Product> {
+    logger.debug('Reactivating product record', { id, tenantId: ctx.tenantId })
+
+    const existing = await this.findUnique(id, ctx)
+    if (!existing) {
+      throw new NotFoundError('Product')
+    }
+
+    return this.db.product.update({
+      where: { id },
+      data: {
+        is_active: true,
+        updated_at: new Date(),
+      },
+    })
+  }
+
   // -----------------------------------------------------------------------
   // Pre-condition checks for soft-delete
   // -----------------------------------------------------------------------

@@ -71,7 +71,7 @@ export const authService = {
   async refreshToken(refreshToken: string): Promise<{ access_token: string }> {
     const response = await apiClient.post<{ success: boolean; data: { accessToken: string } }>(
       API_ENDPOINTS.AUTH.REFRESH,
-      { refresh_token: refreshToken }
+      { refreshToken }
     )
     return { access_token: response.data.data.accessToken }
   },

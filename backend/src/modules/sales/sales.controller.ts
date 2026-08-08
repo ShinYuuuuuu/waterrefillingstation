@@ -155,6 +155,15 @@ export const saleController = {
     }
   },
 
+  async incomeTrends(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await saleService.getIncomeTrends(buildContext(req))
+      return res.status(httpStatus.OK).json(successResponse(result))
+    } catch (error) {
+      next(error)
+    }
+  },
+
   /**
    * GET /sales/receipt/:saleId
    * Get sale receipt data.
@@ -178,7 +187,7 @@ export const saleController = {
  * and tenantIsolation middleware.
  */
 function buildContext(req: Request): SaleContext {
-  const { tenantId, branchId, userId } = req
+  const { tenantId, branchId, userId, userRole } = req
 
   if (!tenantId || !userId) {
     throw new AppError(httpStatus.UNAUTHORIZED, 'Authentication required')
@@ -188,5 +197,6 @@ function buildContext(req: Request): SaleContext {
     tenantId,
     branchId: branchId ?? null,
     userId,
+    userRole,
   }
 }

@@ -48,6 +48,35 @@ export interface CustomerListResponse {
   }
 }
 
+export interface CustomerPurchaseSummary {
+  customerId: string
+  totalPurchases: number
+  totalGallons: number
+  totalSpent: number
+  lastPurchase: string | null
+}
+
+export interface CustomerSalesHistoryItem {
+  id: string
+  invoiceNumber: string
+  date: string
+  quantity: number
+  amount: number
+  channel: string
+  paymentMethod: string | null
+  paymentReference: string | null
+}
+
+export interface CustomerSalesHistoryResponse {
+  data: CustomerSalesHistoryItem[]
+  meta: {
+    page: number
+    limit: number
+    total: number
+    totalPages: number
+  }
+}
+
 export interface CreateCustomerRequest {
   customerType?: CustomerType
   fullName: string

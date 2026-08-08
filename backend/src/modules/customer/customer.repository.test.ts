@@ -295,7 +295,7 @@ describe('CustomerRepository', () => {
         baseCtx,
       )
 
-      const dup = await customerRepository.findDuplicate('+639173337777', null, baseCtx)
+      const dup = await customerRepository.findDuplicate('+639173337777', null, null, baseCtx)
       expect(dup).not.toBeNull()
       expect(dup!.full_name).toBe('Dup Check')
     })
@@ -306,8 +306,19 @@ describe('CustomerRepository', () => {
         baseCtx,
       )
 
-      const dup = await customerRepository.findDuplicate('+639000000000', 'dup@test.com', baseCtx)
+      const dup = await customerRepository.findDuplicate('+639000000000', 'dup@test.com', null, baseCtx)
       expect(dup).not.toBeNull()
+    })
+
+    it('should find a customer by name (case-insensitive)', async () => {
+      await customerRepository.create(
+        { fullName: 'Case Insensitive', phone: '+639173339991' },
+        baseCtx,
+      )
+
+      const dup = await customerRepository.findDuplicate('+639000000000', null, 'case insensitive', baseCtx)
+      expect(dup).not.toBeNull()
+      expect(dup!.full_name).toBe('Case Insensitive')
     })
 
     it('should exclude the customer specified by excludeId', async () => {
@@ -316,7 +327,7 @@ describe('CustomerRepository', () => {
         baseCtx,
       )
 
-      const dup = await customerRepository.findDuplicate('+639173339999', null, baseCtx, created.id)
+      const dup = await customerRepository.findDuplicate('+639173339999', null, null, baseCtx, created.id)
       expect(dup).toBeNull()
     })
 
@@ -332,7 +343,7 @@ describe('CustomerRepository', () => {
         userId: 'test-user',
       }
 
-      const dup = await customerRepository.findDuplicate('+639173330000', null, otherCtx)
+      const dup = await customerRepository.findDuplicate('+639173330000', null, null, otherCtx)
       expect(dup).toBeNull()
     })
   })

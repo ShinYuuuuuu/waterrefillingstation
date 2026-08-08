@@ -126,28 +126,28 @@ describe('SaleController', () => {
       expect(res.body.data.status).toBe('COMPLETED')
     })
 
-    it('should reject non-cash payment', async () => {
-      const res = await request(app).post('/sales').send({
-        channel: 'IN_STORE',
-        items: [
-          {
-            productId: '11111111-1111-1111-1111-111111111111',
-            productName: 'Water Refill',
-            quantity: 1,
-            unitPrice: 20,
-          },
-        ],
-        payments: [
-          {
-            amount: 20,
-            method: 'GCASH',
-          },
-        ],
-      })
+      it('should allow non-cash payment methods', async () => {
+        const res = await request(app).post('/sales').send({
+          channel: 'IN_STORE',
+          items: [
+            {
+              productId: '11111111-1111-1111-1111-111111111111',
+              productName: 'Water Refill',
+              quantity: 1,
+              unitPrice: 20,
+            },
+          ],
+          payments: [
+            {
+              amount: 20,
+              method: 'GCASH',
+            },
+          ],
+        })
 
-      expect(res.status).toBe(400)
-      expect(res.body.error.message).toBe('Cash payment only')
-    })
+        expect(res.status).toBe(201)
+        expect(res.body.data.payments[0].method).toBe('GCASH')
+      })
 
     it('should reject insufficient payment', async () => {
       const res = await request(app).post('/sales').send({

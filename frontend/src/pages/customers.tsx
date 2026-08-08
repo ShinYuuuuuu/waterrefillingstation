@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { PageLayout } from '@/layouts/page-layout'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { SearchBar } from '@/components/ui/search-bar'
 import { DataTable } from '@/components/ui/data-table'
 import { SkeletonTable } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
@@ -11,7 +10,7 @@ import { Modal } from '@/components/ui/modal'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
-import { FiPlus, FiEdit, FiTrash2 } from 'react-icons/fi'
+import { FiPlus, FiEdit, FiTrash2, FiEye } from 'react-icons/fi'
 import { customerService } from '@/services/customer.service'
 import type { Customer, CustomerType, CreateCustomerRequest, UpdateCustomerRequest } from '@/types/customer'
 import { useToast } from '@/components/ui/toast'
@@ -24,6 +23,8 @@ export function CustomersPage() {
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
+  const [historyCustomerId, setHistoryCustomerId] = useState<string | null>(null)
+  const [historyPage, setHistoryPage] = useState(1)
 
   const [formData, setFormData] = useState<{
     customerType: CustomerType
@@ -47,6 +48,24 @@ export function CustomersPage() {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['customers', searchQuery, page],
     queryFn: () => customerService.list({ search: searchQuery || undefined, page, limit: 20 }),
+  })
+
+  const purchaseSummaryQueries = useQuery({
+    queryKey: ['customers', 'purchase-summary', data?.data?.map((c) => c.id)],
+    queryFn: async () => {
+      if (!data?.data?.length) return {}
+      const summaries = await Promise.all(
+        data.data.map((c) => customerService.getPurchaseSummary(c.id))
+      )
+      return Object.fromEntries(summaries.map((s) => [s.customerId, s]))
+    },
+    enabled: !!data?.data?.length,
+  })
+
+  const { data: historyData, isLoading: historyLoading } = useQuery({
+    queryKey: ['customers', 'sales', historyCustomerId, historyPage],
+    queryFn: () => customerService.getSalesHistory(historyCustomerId!, { page: historyPage, limit: 10 }),
+    enabled: !!historyCustomerId,
   })
 
   const createMutation = useMutation({
@@ -148,28 +167,50 @@ export function CustomersPage() {
   const isDeleting = deleteMutation.isPending
 
   const columns = [
-    { key: 'fullName', header: 'Customer Name' },
-    { key: 'email', header: 'Email' },
-    { key: 'phone', header: 'Phone' },
     {
-      key: 'customerType',
-      header: 'Type',
+      key: 'fullName',
+      header: 'Customer Name',
       render: (item: Customer) => (
-        <Badge variant={item.customerType === 'RETAIL' ? 'info' : 'secondary'}>
-          {item.customerType}
-        </Badge>
+        <div>
+          <p className="font-medium text-gray-900 dark:text-white">{item.fullName}</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">{item.phone}</p>
+        </div>
       ),
     },
     {
-      key: 'createdAt',
-      header: 'Joined',
-      render: (item: Customer) => new Date(item.createdAt).toLocaleDateString(),
+      key: 'totalPurchases',
+      header: 'Total Purchases',
+      render: (item: Customer) => purchaseSummaryQueries.data?.[item.id]?.totalPurchases ?? 0,
+    },
+    {
+      key: 'totalGallons',
+      header: 'Total Gallons',
+      render: (item: Customer) => purchaseSummaryQueries.data?.[item.id]?.totalGallons ?? 0,
+    },
+    {
+      key: 'totalSpent',
+      header: 'Total Spent',
+      render: (item: Customer) => {
+        const spent = purchaseSummaryQueries.data?.[item.id]?.totalSpent ?? 0
+        return <span>₱{spent.toFixed(2)}</span>
+      },
+    },
+    {
+      key: 'lastPurchase',
+      header: 'Last Purchase',
+      render: (item: Customer) => {
+        const last = purchaseSummaryQueries.data?.[item.id]?.lastPurchase
+        return last ? new Date(last).toLocaleDateString() : 'N/A'
+      },
     },
     {
       key: 'actions',
       header: 'Actions',
       render: (item: Customer) => (
         <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setHistoryCustomerId(item.id)}>
+            <FiEye className="w-4 h-4" />
+          </Button>
           <Button variant="ghost" size="sm" onClick={() => openEditForm(item)}>
             <FiEdit className="w-4 h-4" />
           </Button>
@@ -239,12 +280,7 @@ export function CustomersPage() {
         { label: 'Customers' },
       ]}
     >
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <SearchBar
-          value={searchQuery}
-          onChange={setSearchQuery}
-          placeholder="Search customers..."
-        />
+      <div className="flex justify-end">
         <Button onClick={openCreateForm}>
           <FiPlus className="w-4 h-4 mr-2" />
           Add Customer
@@ -370,7 +406,7 @@ export function CustomersPage() {
               type="number"
               value={formData.creditLimit ?? ''}
               onChange={(e) => setFormData({ ...formData, creditLimit: e.target.value ? Number(e.target.value) : undefined })}
-              placeholder="0.00"
+              placeholder="Enter credit limit"
             />
           </div>
 
@@ -391,6 +427,88 @@ export function CustomersPage() {
             </Button>
           </div>
         </div>
+      </Modal>
+
+      <Modal
+        open={!!historyCustomerId}
+        onClose={() => {
+          setHistoryCustomerId(null)
+          setHistoryPage(1)
+        }}
+        title={
+          historyCustomerId
+            ? `Purchase History — ${data?.data?.find((c) => c.id === historyCustomerId)?.fullName || 'Customer'}`
+            : 'Purchase History'
+        }
+        size="lg"
+      >
+        {historyCustomerId && (
+          <div className="space-y-4">
+            {historyLoading ? (
+              <SkeletonTable rows={5} columns={6} />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="border-b dark:border-gray-700">
+                      <th className="text-left py-2 px-3">Date</th>
+                      <th className="text-left py-2 px-3">Transaction ID</th>
+                      <th className="text-left py-2 px-3">Channel</th>
+                      <th className="text-left py-2 px-3">Payment</th>
+                      <th className="text-right py-2 px-3">Quantity</th>
+                      <th className="text-right py-2 px-3">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historyData?.data?.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="text-center py-8 text-gray-500 dark:text-gray-400">
+                          No purchase history found
+                        </td>
+                      </tr>
+                    ) : (
+                      historyData?.data?.map((sale) => (
+                        <tr key={sale.id} className="border-b dark:border-gray-700">
+                          <td className="py-2 px-3">{new Date(sale.date).toLocaleDateString()}</td>
+                          <td className="py-2 px-3 font-mono text-xs">{sale.invoiceNumber}</td>
+                          <td className="py-2 px-3">
+                            <Badge variant="info">{sale.channel}</Badge>
+                          </td>
+                          <td className="py-2 px-3">{sale.paymentMethod || 'N/A'}</td>
+                          <td className="py-2 px-3 text-right">{sale.quantity}</td>
+                          <td className="py-2 px-3 text-right">₱{sale.amount.toFixed(2)}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {historyData?.meta && historyData.meta.totalPages > 1 && (
+              <div className="flex items-center justify-between pt-4">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
+                  disabled={historyPage <= 1}
+                >
+                  Previous
+                </Button>
+                <span className="text-sm text-gray-600 dark:text-gray-300">
+                  Page {historyData.meta.page} of {historyData.meta.totalPages}
+                </span>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setHistoryPage((p) => p + 1)}
+                  disabled={historyPage >= historyData.meta.totalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
       </Modal>
 
       <ConfirmDialog

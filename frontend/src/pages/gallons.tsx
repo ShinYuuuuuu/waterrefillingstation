@@ -477,7 +477,7 @@ export function GallonsPage() {
                 type="number"
                 value={createForm.purchasePrice}
                 onChange={(e) => setCreateForm({ ...createForm, purchasePrice: e.target.value })}
-                placeholder="0.00"
+                placeholder="Enter price"
               />
             </div>
             <div>
@@ -545,11 +545,12 @@ export function GallonsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Purchase Price</label>
-                <Input
-                  type="number"
-                  value={editForm.purchasePrice}
-                  onChange={(e) => setEditForm({ ...editForm, purchasePrice: e.target.value })}
-                />
+                  <Input
+                    type="number"
+                    value={editForm.purchasePrice}
+                    onChange={(e) => setEditForm({ ...editForm, purchasePrice: e.target.value })}
+                    placeholder="Enter price"
+                  />
               </div>
             </div>
             <div className="flex justify-end gap-3 pt-4">

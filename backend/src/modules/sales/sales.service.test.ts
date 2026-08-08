@@ -120,13 +120,19 @@ describe('SaleService', () => {
       ).rejects.toThrow('At least one payment is required')
     })
 
-    it('should throw if non-cash payment is provided', async () => {
-      await expect(
-        saleService.createSale(
-          { channel: 'IN_STORE', items: [{ productId: 'svc-prod-1', productName: 'Refill', quantity: 1, unitPrice: 20 }], payments: [{ amount: 20, method: 'GCASH' }] },
-          baseCtx,
-        ),
-      ).rejects.toThrow('Cash payment only')
+    it('should allow non-cash payment methods', async () => {
+      const sale = await saleService.createSale(
+        {
+          channel: 'IN_STORE',
+          items: [{ productId: 'svc-prod-1', productName: 'Refill', quantity: 1, unitPrice: 20 }],
+          payments: [{ amount: 20, method: 'GCASH' }],
+        },
+        baseCtx,
+      )
+
+      expect(sale.items).toHaveLength(1)
+      expect(sale.payments).toHaveLength(1)
+      expect(sale.payments[0].method).toBe('GCASH')
     })
 
     it('should throw if payment amount is less than grand total', async () => {
@@ -373,7 +379,7 @@ describe('SaleService', () => {
       expect((payment as any).payment_method).toBe('CASH')
     })
 
-    it('should throw for non-cash payment', async () => {
+    it('should allow non-cash payment methods', async () => {
       const sale = await saleService.createSale(
         {
           channel: 'IN_STORE',
@@ -383,7 +389,9 @@ describe('SaleService', () => {
         baseCtx,
       )
 
-      await expect(saleService.recordPayment(sale.id, { amount: 10, method: 'GCASH' }, baseCtx)).rejects.toThrow('Cash payment only')
+      const payment = await saleService.recordPayment(sale.id, { amount: 10, method: 'GCASH' }, baseCtx)
+      expect(Number((payment as any).amount)).toBe(10)
+      expect((payment as any).payment_method).toBe('GCASH')
     })
 
     it('should throw for voided sale', async () => {

@@ -136,7 +136,12 @@ export const saleListQuerySchema = z.object({
  */
 export const dailySummaryQuerySchema = z.object({
   query: z.object({
-    date: z.string().datetime().optional(),
+    // The reports UI selects calendar days (YYYY-MM-DD), while API clients may
+    // also provide a full ISO timestamp. Both represent a valid report date.
+    date: z.union([
+      z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must use YYYY-MM-DD format'),
+      z.string().datetime(),
+    ]).optional(),
     branchId: z.string().uuid('Invalid branch ID').optional(),
   }),
 })

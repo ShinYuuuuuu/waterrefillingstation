@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router-dom'
 import { cn } from '@/utils/cn'
 import { useAuthContext } from '@/contexts/auth-context'
@@ -8,14 +9,14 @@ import {
   FiPackage,
   FiShoppingCart,
   FiTruck,
-  FiBarChart2,
-  FiSettings,
-  FiUser,
   FiMenu,
   FiX,
   FiChevronLeft,
 } from 'react-icons/fi'
 import type { UserRole } from '@/types'
+import { APP_LOGO_URL, APP_SHORT_NAME } from '@/constants'
+import { salesService } from '@/services/sales.service'
+import { inventoryService } from '@/services/inventory.service'
 
 interface MenuItem {
   href: string
@@ -29,7 +30,7 @@ const menuItems: MenuItem[] = [
     href: '/dashboard',
     label: 'Dashboard',
     icon: FiLayout,
-    roles: ['owner', 'cashier', 'rider', 'super_admin'],
+    roles: ['owner', 'cashier', 'super_admin'],
   },
   {
     href: '/customers',
@@ -50,12 +51,6 @@ const menuItems: MenuItem[] = [
     roles: ['owner', 'cashier', 'super_admin'],
   },
   {
-    href: '/gallons',
-    label: 'Gallons',
-    icon: FiShoppingCart,
-    roles: ['owner', 'super_admin'],
-  },
-  {
     href: '/sales',
     label: 'Sales',
     icon: FiShoppingCart,
@@ -65,25 +60,7 @@ const menuItems: MenuItem[] = [
     href: '/deliveries',
     label: 'Deliveries',
     icon: FiTruck,
-    roles: ['owner', 'cashier', 'rider', 'super_admin'],
-  },
-  {
-    href: '/reports',
-    label: 'Reports',
-    icon: FiBarChart2,
-    roles: ['owner', 'super_admin'],
-  },
-  {
-    href: '/settings',
-    label: 'Settings',
-    icon: FiSettings,
-    roles: ['owner', 'super_admin'],
-  },
-  {
-    href: '/profile',
-    label: 'Profile',
-    icon: FiUser,
-    roles: ['owner', 'cashier', 'rider', 'super_admin'],
+    roles: ['cashier', 'rider'],
   },
 ]
 
@@ -92,6 +69,51 @@ export function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const location = useLocation()
   const { user } = useAuthContext()
+  const [seenAt, setSeenAt] = useState<Record<string, string>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('owner-page-seen-at') ?? '{}')
+    } catch {
+      return {}
+    }
+  })
+
+  const latestSale = useQuery({
+    queryKey: ['sidebar', 'latest-sale'],
+    queryFn: () => salesService.list({ page: 1, limit: 1 }),
+    enabled: user?.role === 'owner',
+    refetchInterval: 30000,
+  })
+  const lowStock = useQuery({
+    queryKey: ['sidebar', 'low-stock'],
+    queryFn: () => inventoryService.getLowStockAlerts(),
+    enabled: user?.role === 'owner',
+    refetchInterval: 30000,
+  })
+  const pendingInventory = useQuery({
+    queryKey: ['sidebar', 'pending-inventory'],
+    queryFn: () => inventoryService.listInventoryUpdateRequests({ status: 'PENDING', page: 1, limit: 1 }),
+    enabled: user?.role === 'owner',
+    refetchInterval: 30000,
+  })
+
+  const latestSaleAt = latestSale.data?.data[0]?.createdAt
+  const hasUnseenSale = Boolean(latestSaleAt && new Date(latestSaleAt) > new Date(seenAt.sales ?? 0))
+  const hasInventoryAttention = Boolean((lowStock.data?.length ?? 0) > 0 || (pendingInventory.data?.meta.total ?? 0) > 0)
+
+  const hasIndicator = (href: string) => {
+    if (user?.role !== 'owner') return false
+    if (href === '/sales') return hasUnseenSale
+    if (href === '/inventory') return hasInventoryAttention
+    return false
+  }
+
+  const markPageSeen = (href: string) => {
+    if (user?.role !== 'owner' || href !== '/sales') return
+    const key = href.slice(1)
+    const updated = { ...seenAt, [key]: new Date().toISOString() }
+    setSeenAt(updated)
+    localStorage.setItem('owner-page-seen-at', JSON.stringify(updated))
+  }
 
   const userRole = user?.role
   const filteredItems = menuItems.filter((item) =>
@@ -101,16 +123,10 @@ export function Sidebar() {
   const sidebarContent = (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200 dark:border-gray-700">
-        {!collapsed && (
-          <Link to="/dashboard" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary-600 flex items-center justify-center">
-              <span className="text-white font-bold text-sm">W</span>
-            </div>
-            <span className="font-bold text-gray-900 dark:text-white">
-              WSMS
-            </span>
-          </Link>
-        )}
+        <Link to="/dashboard" className="flex items-center gap-2 min-w-0">
+          <img src={APP_LOGO_URL} alt="Z's Purified logo" className="w-10 h-10 shrink-0 rounded-full object-cover ring-1 ring-primary-100" />
+          <span className={cn('font-semibold text-primary-900 dark:text-white leading-tight truncate', collapsed && 'lg:hidden')}>{APP_SHORT_NAME}</span>
+        </Link>
         <button
           onClick={() => setCollapsed(!collapsed)}
           className="hidden lg:flex p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
@@ -140,18 +156,22 @@ export function Sidebar() {
             <Link
               key={item.href}
               to={item.href}
-              onClick={() => setMobileOpen(false)}
+              onClick={() => {
+                setMobileOpen(false)
+                markPageSeen(item.href)
+              }}
               className={cn(
-                'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                'relative flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
                 isActive
                   ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/20 dark:text-primary-400'
                   : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800',
-                collapsed && 'justify-center px-2'
+                collapsed && 'lg:justify-center lg:px-2'
               )}
               title={collapsed ? item.label : undefined}
             >
               <Icon className="w-5 h-5 flex-shrink-0" />
-              {!collapsed && <span>{item.label}</span>}
+              <span className={cn('flex items-center gap-2', collapsed && 'lg:hidden')}>{item.label}{hasIndicator(item.href) && <span className="h-2 w-2 rounded-full bg-red-500" aria-label="New activity" />}</span>
+              {collapsed && hasIndicator(item.href) && <span className="hidden lg:block absolute ml-5 -mt-5 h-2 w-2 rounded-full bg-red-500" aria-label="New activity" />}
             </Link>
           )
         })}
@@ -172,7 +192,7 @@ export function Sidebar() {
       {/* Desktop sidebar */}
       <aside
         className={cn(
-          'hidden lg:flex flex-col border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 transition-all duration-300',
+          'hidden lg:flex flex-col border-r border-primary-100 dark:border-gray-700 bg-white dark:bg-gray-800 transition-all duration-300',
           collapsed ? 'w-16' : 'w-64'
         )}
       >
@@ -181,7 +201,7 @@ export function Sidebar() {
 
       {/* Mobile sidebar */}
       {mobileOpen && (
-        <aside className="fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 lg:hidden">
+        <aside className="fixed inset-y-0 left-0 z-50 w-[min(18rem,85vw)] bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 lg:hidden">
           {sidebarContent}
         </aside>
       )}

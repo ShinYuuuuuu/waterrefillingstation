@@ -52,6 +52,7 @@ export class ProductMapper {
       deposit_amount: data.depositAmount,
       reorder_level: data.reorderLevel ?? 0,
       is_active: data.isActive ?? true,
+      is_stock_tracked: data.type !== 'SERVICE',
       created_by: context.userId,
     }
   }
@@ -67,6 +68,7 @@ export class ProductMapper {
     if (data.name !== undefined) input.name = data.name
     if (data.description !== undefined) input.description = data.description
     if (data.type !== undefined) input.type = data.type
+    if (data.type !== undefined) input.is_stock_tracked = data.type !== 'SERVICE'
     if (data.unitOfMeasure !== undefined) input.unit_of_measure = data.unitOfMeasure
     if (data.basePrice !== undefined) input.base_price = data.basePrice
     if (data.costPrice !== undefined) input.cost_price = data.costPrice

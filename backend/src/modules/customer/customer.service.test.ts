@@ -125,7 +125,7 @@ describe('CustomerService', () => {
           { fullName: 'Second', phone: '+639171115555' },
           baseCtx,
         ),
-      ).rejects.toThrow('A customer with this phone number or email already exists')
+      ).rejects.toThrow('A customer with this phone number, email, or name already exists')
     })
 
     it('should reject duplicate email within tenant', async () => {
@@ -139,7 +139,7 @@ describe('CustomerService', () => {
           { fullName: 'Second', phone: '+639171117777', email: 'dup@test.com' },
           baseCtx,
         ),
-      ).rejects.toThrow('A customer with this phone number or email already exists')
+      ).rejects.toThrow('A customer with this phone number, email, or name already exists')
     })
 
     it('should reject when branch context is missing (HQ/Owner)', async () => {
@@ -305,7 +305,7 @@ describe('CustomerService', () => {
 
       await expect(
         customerService.updateCustomer(customerId, { phone: '+639173222222' }, baseCtx),
-      ).rejects.toThrow('A different customer with this phone number or email already exists')
+      ).rejects.toThrow('A different customer with this phone number, email, or name already exists')
     })
 
     it('should throw NotFoundError for non-existent customer', async () => {

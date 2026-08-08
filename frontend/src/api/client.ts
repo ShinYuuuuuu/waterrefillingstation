@@ -35,7 +35,10 @@ apiClient.interceptors.request.use(
       hasToken: !!token,
       hasManualAuth: !!config.headers.Authorization,
     })
-    if (token) {
+    // Preserve an explicitly supplied token (for example, the fresh access
+    // token used by the login flow to fetch /auth/me). Overwriting it with a
+    // stale token from localStorage makes an otherwise successful login fail.
+    if (token && !config.headers.Authorization) {
       config.headers.Authorization = `Bearer ${token}`
     }
     return config
@@ -63,7 +66,9 @@ apiClient.interceptors.response.use(
 
     const originalRequest = error.config
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    const isRefreshRequest = originalRequest?.url === '/auth/refresh-token'
+
+    if (error.response?.status === 401 && !originalRequest._retry && !isRefreshRequest) {
       console.log('[AUTH DEBUG] RESPONSE_401_HANDLING', {
         url: originalRequest.url,
         isRefreshing,
@@ -92,14 +97,18 @@ apiClient.interceptors.response.use(
       }
 
       try {
-        const response = await apiClient.post<{ success: boolean; data: { accessToken: string } }>(
+        const response = await apiClient.post<{
+          success: boolean
+          data: { accessToken: string; refreshToken: string }
+        }>(
           '/auth/refresh-token',
-          { refresh_token: refreshToken }
+          { refreshToken }
         )
-        const { accessToken } = response.data.data
+        const { accessToken, refreshToken: newRefreshToken } = response.data.data
 
         localStorage.setItem('access_token', accessToken)
-        useAuthStore.getState().setTokens(accessToken, refreshToken)
+        localStorage.setItem('refresh_token', newRefreshToken)
+        useAuthStore.getState().setTokens(accessToken, newRefreshToken)
         processQueue(null, accessToken)
 
         originalRequest.headers.Authorization = `Bearer ${accessToken}`

@@ -35,3 +35,14 @@ export const changePasswordSchema = z.object({
     newPassword: z.string().min(8, 'New password must be at least 8 characters'),
   }),
 })
+
+export const updateStaffAccountSchema = z.object({
+  params: z.object({
+    userId: z.string().uuid('Invalid user ID'),
+  }),
+  body: z.object({
+    fullName: z.string().trim().min(1, 'Name is required').max(150),
+    email: z.string().trim().toLowerCase().email('Invalid email format'),
+    password: z.string().min(8, 'Password must be at least 8 characters').optional(),
+  }),
+})

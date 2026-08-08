@@ -86,9 +86,10 @@ export class SaleRepository {
         take: limit,
         orderBy,
         include: {
-          items: true,
+          items: { include: { product: { select: { name: true } } } },
           payments: true,
           customer: { select: { full_name: true, phone: true } },
+          user: { select: { full_name: true } },
         },
       }),
     ])
@@ -109,9 +110,10 @@ export class SaleRepository {
     const sale = await this.db.salesTransaction.findFirst({
       where: this.buildScopeWhere(ctx, { id }),
       include: {
-        items: true,
+        items: { include: { product: { select: { name: true } } } },
         payments: true,
         customer: { select: { full_name: true, phone: true, email: true } },
+        user: { select: { full_name: true } },
       },
     })
 

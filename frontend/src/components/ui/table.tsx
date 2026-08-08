@@ -70,7 +70,7 @@ interface TableCellProps {
 export function TableCell({ children, className, colSpan }: TableCellProps) {
   return (
     <td
-      className={cn('px-6 py-4 whitespace-nowrap', className)}
+      className={cn('px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap', className)}
       colSpan={colSpan}
     >
       {children}
@@ -88,7 +88,7 @@ export function TableHead({ children, className }: TableHeadProps) {
     <th
       scope="col"
       className={cn(
-        'px-6 py-3 font-medium text-gray-700 dark:text-gray-300',
+        'px-3 sm:px-6 py-3 font-medium text-gray-700 dark:text-gray-300',
         className
       )}
     >

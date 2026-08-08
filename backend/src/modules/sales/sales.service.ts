@@ -15,6 +15,7 @@ import {
 } from './sales.types'
 import { SaleRepository, saleRepository } from './sales.repository'
 import { SaleMapper } from './sales.mapper'
+import { deliveryService } from '../delivery/delivery.service'
 
 /**
  * Application service for the Sales module.
@@ -58,12 +59,6 @@ export class SaleService {
       throw new AppError(httpStatus.BAD_REQUEST, 'At least one payment is required')
     }
 
-    // Cash payment only validation
-    const invalidPayment = data.payments.find((p: any) => p.method !== 'CASH')
-    if (invalidPayment) {
-      throw new AppError(httpStatus.BAD_REQUEST, 'Cash payment only')
-    }
-
     // Validate customer if provided
     if (data.customerId) {
       const customer = await prisma.customer.findFirst({
@@ -93,21 +88,11 @@ export class SaleService {
         throw new NotFoundError('Product')
       }
 
-      let unitPrice = item.unitPrice
-
-      // Refill pricing: Walk-in = 20, Delivery = 25
-      if ((product as any).type === 'SERVICE') {
-        if (data.channel === 'IN_STORE') {
-          unitPrice = 20
-        } else if (data.channel === 'DELIVERY') {
-          unitPrice = 25
-        }
-      }
-
-      // For CONTAINER and FINISHED_GOOD, use configurable price (provided or base_price)
-      if (((product as any).type === 'CONTAINER' || (product as any).type === 'FINISHED_GOOD') && !item.unitPrice) {
-        unitPrice = Number((product as any).base_price)
-      }
+      // A refill costs the configured base price (₱20). Delivery adds ₱5 to
+      // every gallon, rather than adding one delivery fee per transaction.
+      const isWaterRefill = (product as any).sku === 'WATER-5G-REFILL'
+      const unitPrice = Number((product as any).base_price) +
+        (data.channel === 'DELIVERY' && isWaterRefill ? 5 : 0)
 
       processedItems.push({
         ...item,
@@ -144,9 +129,16 @@ export class SaleService {
       logger.debug('Active shift found for opening cash validation', { shiftId: activeShift.id })
     }
 
-    // Deduct inventory for each item
+    // Deduct inventory for each stock-tracked item only
     for (const item of processedItems) {
-      await this.deductInventory(ctx, item.productId, item.quantity)
+      const product = await prisma.product.findUnique({
+        where: { id: item.productId },
+        select: { is_stock_tracked: true },
+      })
+
+      if (product?.is_stock_tracked) {
+        await this.deductInventory(ctx, item.productId, item.quantity)
+      }
     }
 
     // Create the sale via repository
@@ -157,6 +149,24 @@ export class SaleService {
     }
 
     const createdSale = await this.repository.create(createData, ctx)
+
+    // Create the rider order on the server so every cashier entry point sends
+    // delivery sales to the rider queue.
+    if (data.channel === 'DELIVERY' && data.customerId) {
+      await deliveryService.createDeliveryOrder({
+        customerId: data.customerId,
+        orderType: 'ONE_TIME',
+        paymentStatus: 'CONFIRMED',
+        salesTransactionId: createdSale.id,
+        specialInstructions: data.notes ?? null,
+        items: processedItems.map((item) => ({
+          productId: item.productId,
+          productName: item.productName,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+        })),
+      }, { ...ctx, userRole: ctx.userRole ?? 'cashier' })
+    }
 
     // Log audit
     await this.logAudit({
@@ -296,11 +306,6 @@ export class SaleService {
       throw new AppError(httpStatus.BAD_REQUEST, 'Cannot record payment on a voided sale')
     }
 
-    // Cash payment only
-    if (data.method !== 'CASH') {
-      throw new AppError(httpStatus.BAD_REQUEST, 'Cash payment only')
-    }
-
     const payment = await this.repository.recordPayment(saleId, data, ctx)
 
     await this.logAudit({
@@ -371,6 +376,42 @@ export class SaleService {
    */
   async getDailySummary(date: string, branchId: string | null, ctx: SaleContext): Promise<DailySummaryResponse> {
     return this.repository.getDailySummary(date, branchId, ctx)
+  }
+
+  async getIncomeTrends(ctx: SaleContext) {
+    const now = new Date()
+    const start = new Date(now.getFullYear(), now.getMonth() - 11, 1)
+    const sales = await prisma.salesTransaction.findMany({
+      where: {
+        tenant_id: ctx.tenantId,
+        ...(ctx.branchId ? { branch_id: ctx.branchId } : {}),
+        status: 'COMPLETED',
+        deleted_at: null,
+        created_at: { gte: start },
+      },
+      select: { created_at: true, grand_total: true },
+    })
+
+    const sumRange = (from: Date, to: Date) => sales.reduce((sum: number, sale: any) => {
+      return sale.created_at >= from && sale.created_at < to ? sum + Number(sale.grand_total) : sum
+    }, 0)
+
+    const daily = Array.from({ length: 7 }, (_, index) => {
+      const from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (6 - index))
+      const to = new Date(from); to.setDate(to.getDate() + 1)
+      return { label: from.toLocaleDateString('en-PH', { weekday: 'short' }), total: sumRange(from, to) }
+    })
+    const weekly = Array.from({ length: 8 }, (_, index) => {
+      const to = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((7 - index) * 7) + 1)
+      const from = new Date(to); from.setDate(from.getDate() - 7)
+      return { label: `${from.getMonth() + 1}/${from.getDate()}`, total: sumRange(from, to) }
+    })
+    const monthly = Array.from({ length: 12 }, (_, index) => {
+      const from = new Date(now.getFullYear(), now.getMonth() - (11 - index), 1)
+      const to = new Date(from.getFullYear(), from.getMonth() + 1, 1)
+      return { label: from.toLocaleDateString('en-PH', { month: 'short' }), total: sumRange(from, to) }
+    })
+    return { daily, weekly, monthly }
   }
 
   // -----------------------------------------------------------------------

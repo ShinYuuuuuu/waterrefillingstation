@@ -12,6 +12,8 @@ export const ProductPermission = {
   CREATE: 'products.create',
   UPDATE: 'products.update',
   DELETE: 'products.delete',
+  ARCHIVE: 'products.archive',
+  REACTIVATE: 'products.reactivate',
 } as const
 
 /**

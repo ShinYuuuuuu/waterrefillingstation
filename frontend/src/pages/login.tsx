@@ -106,7 +106,7 @@ export function LoginPage() {
 
       <div className="text-center text-sm">
         <span className="text-gray-500 dark:text-gray-400">
-          Demo credentials: any email/password
+          Demo accounts use the credentials configured by the database seed.
         </span>
       </div>
     </div>

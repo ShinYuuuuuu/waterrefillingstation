@@ -1,14 +1,21 @@
 import { useState } from 'react'
 import { PageLayout } from '@/layouts/page-layout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { FiUser, FiMail, FiPhone, FiHome, FiCalendar, FiShield } from 'react-icons/fi'
+import { FiUser, FiMail, FiHome, FiShield } from 'react-icons/fi'
+import { useAuthContext } from '@/contexts/auth-context'
 
 export function ProfilePage() {
   const [isLoading] = useState(false)
+  const { user } = useAuthContext()
+  const initials = user?.full_name
+    ?.split(' ')
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase() || 'U'
 
   if (isLoading) {
     return (
@@ -41,18 +48,18 @@ export function ProfilePage() {
           <CardContent className="pt-6">
             <div className="flex flex-col items-center text-center">
               <Avatar
-                fallback="JD"
+                fallback={initials}
                 size="lg"
                 className="mb-4"
               />
               <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                John Doe
+                {user?.full_name ?? 'User'}
               </h2>
               <p className="text-gray-500 dark:text-gray-400">
-                admin@wsms.com
+                {user?.email ?? ''}
               </p>
               <Badge variant="info" className="mt-2">
-                Admin
+                {(user?.role ?? 'user').replace('_', ' ')}
               </Badge>
             </div>
           </CardContent>
@@ -68,51 +75,33 @@ export function ProfilePage() {
                 <FiUser className="w-5 h-5 text-gray-400" />
                 <div>
                   <p className="text-xs text-gray-500 dark:text-gray-400">Full Name</p>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">John Doe</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">{user?.full_name ?? '—'}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
                 <FiMail className="w-5 h-5 text-gray-400" />
                 <div>
                   <p className="text-xs text-gray-500 dark:text-gray-400">Email</p>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">john@wsms.com</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <FiPhone className="w-5 h-5 text-gray-400" />
-                <div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Phone</p>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">09123456789</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">{user?.email ?? '—'}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
                 <FiHome className="w-5 h-5 text-gray-400" />
                 <div>
                   <p className="text-xs text-gray-500 dark:text-gray-400">Branch</p>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">Main Branch</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <FiCalendar className="w-5 h-5 text-gray-400" />
-                <div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Joined</p>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">January 2026</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">{user?.branch_id ? 'Assigned Branch' : 'All Branches'}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
                 <FiShield className="w-5 h-5 text-gray-400" />
                 <div>
                   <p className="text-xs text-gray-500 dark:text-gray-400">Role</p>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">Super Admin</p>
+                  <p className="text-sm font-medium capitalize text-gray-900 dark:text-white">{(user?.role ?? 'user').replace('_', ' ')}</p>
                 </div>
               </div>
             </div>
           </CardContent>
         </Card>
-
-        <div className="flex justify-end">
-          <Button>Edit Profile</Button>
-        </div>
       </div>
     </PageLayout>
   )

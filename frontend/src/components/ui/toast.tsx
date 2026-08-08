@@ -41,7 +41,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ toasts, addToast, removeToast }}>
       {children}
-      <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2">
+      <div className="fixed bottom-3 inset-x-3 sm:inset-x-auto sm:bottom-4 sm:right-4 z-[100] flex flex-col gap-2">
         {toasts.map((toast) => (
           <ToastItem key={toast.id} toast={toast} onRemove={removeToast} />
         ))}
@@ -74,7 +74,7 @@ function ToastItem({
   return (
     <div
       className={cn(
-        'flex items-start gap-3 p-4 rounded-lg border shadow-lg max-w-sm animate-in slide-in-from-right',
+        'flex w-full sm:w-auto items-start gap-3 p-4 rounded-lg border shadow-lg sm:max-w-sm animate-in slide-in-from-right',
         variantStyles[toast.type]
       )}
     >

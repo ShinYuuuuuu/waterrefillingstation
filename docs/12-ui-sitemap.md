@@ -64,10 +64,9 @@ graph TD
     F2 --> F2.1[Stock Movement History]
     F2 --> F2.2[Low Stock Alerts]
 
-    B5 --> F3[Container Tracking]
-    F3 --> F3.1[Container Asset List (by Tag/QR)]
-    F3 --> F3.2[Container Holder History]
-    F3 --> F3.3[Damage/Loss Reporting]
+    B5 --> F3[Aggregate Gallon Inventory]
+    F3 --> F3.1[Total Owned / At Shop / In Circulation]
+    F3 --> F3.2[Damage and Loss Totals]
 
     B5 --> F4[Production Batches]
     F4 --> F4.1[Record New Batch]
