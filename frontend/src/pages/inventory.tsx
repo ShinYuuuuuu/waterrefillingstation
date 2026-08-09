@@ -20,10 +20,9 @@ import type {
   InventoryItem,
   LedgerEntry,
   StockCountSession,
-  AdjustmentRequest,
   InventoryUpdateRequest,
 } from '@/types/inventory'
-import { FiEdit, FiFileText, FiCheckCircle, FiAlertTriangle, FiRefreshCw, FiPlus } from 'react-icons/fi'
+import { FiEdit, FiFileText, FiCheckCircle, FiAlertTriangle, FiRefreshCw, FiPlus, FiTrash2 } from 'react-icons/fi'
 
 export function InventoryPage() {
   const queryClient = useQueryClient()
@@ -37,6 +36,7 @@ export function InventoryPage() {
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null)
 
   const [isAdjustOpen, setIsAdjustOpen] = useState(false)
+  const [isDeleteInventoryOpen, setIsDeleteInventoryOpen] = useState(false)
   const [isAddInventoryOpen, setIsAddInventoryOpen] = useState(false)
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
   const [isStockCountOpen, setIsStockCountOpen] = useState(false)
@@ -45,11 +45,11 @@ export function InventoryPage() {
   const [isStillLowOpen, setIsStillLowOpen] = useState(false)
   const [isPendingApprovalsOpen, setIsPendingApprovalsOpen] = useState(false)
 
-  const [adjustForm, setAdjustForm] = useState({ quantity: '', reason: 'MANUAL' as AdjustmentRequest['reason'], notes: '' })
+  const [editInventoryForm, setEditInventoryForm] = useState({ itemName: '', sku: '', quantityOnHand: '', reorderLevel: '' })
   const [adjustError, setAdjustError] = useState('')
   const [updateCountForm, setUpdateCountForm] = useState({ quantity: '', notes: '' })
   const [updateCountError, setUpdateCountError] = useState('')
-  const [addInventoryForm, setAddInventoryForm] = useState({ productId: '', quantityOnHand: '' })
+  const [addInventoryForm, setAddInventoryForm] = useState({ itemName: '', quantityOnHand: '', reorderLevel: '' })
   const [addInventoryError, setAddInventoryError] = useState('')
 
   const { data, isLoading, error, refetch } = useQuery({
@@ -63,13 +63,7 @@ export function InventoryPage() {
     enabled: isOwner,
   })
 
-  const { data: availableProducts } = useQuery({
-    queryKey: ['products', 'inventory-options'],
-    queryFn: () => productService.list({ page: 1, limit: 100, isActive: true }),
-    enabled: isOwner && isAddInventoryOpen,
-  })
-
-  const { data: gallonSummary } = useQuery({
+  const { data: recordedGallonSummary } = useQuery({
     queryKey: ['gallons', 'inventory-summary'],
     queryFn: async () => {
       const statuses = ['IN_STOCK', 'WITH_CUSTOMER', 'WITH_RIDER', 'WITH_RESELLER', 'DAMAGED', 'LOST']
@@ -88,6 +82,21 @@ export function InventoryPage() {
     },
     enabled: isOwner,
   })
+
+  const gallonInventoryItem = (data?.data ?? []).find((item) =>
+    /gallon/i.test(`${item.productName} ${item.productSku}`),
+  )
+  const gallonSummary = recordedGallonSummary
+    ? {
+        ...recordedGallonSummary,
+        atShop: gallonInventoryItem?.quantityOnHand ?? recordedGallonSummary.atShop,
+        inCirculation: Math.max(
+          0,
+          recordedGallonSummary.totalOwned
+            - (gallonInventoryItem?.quantityOnHand ?? recordedGallonSummary.atShop),
+        ),
+      }
+    : undefined
 
   const { data: historyData, refetch: refetchHistory } = useQuery({
     queryKey: ['inventory', 'ledger', selectedItem?.productId],
@@ -110,30 +119,82 @@ export function InventoryPage() {
     enabled: isOwner,
   })
 
-  const adjustMutation = useMutation({
-    mutationFn: (payload: AdjustmentRequest) => inventoryService.createAdjustment(payload),
+  const editInventoryMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedItem) throw new Error('No inventory item selected')
+      await productService.update(selectedItem.productId, {
+        name: editInventoryForm.itemName.trim(),
+        sku: editInventoryForm.sku.trim().toUpperCase(),
+        reorderLevel: Number(editInventoryForm.reorderLevel),
+      })
+      return inventoryService.updateBranchInventory(selectedItem.id, {
+        quantityOnHand: Number(editInventoryForm.quantityOnHand),
+        reservedQuantity: 0,
+      })
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['inventory'] })
-      addToast({ type: 'success', title: 'Stock adjusted successfully' })
+      queryClient.invalidateQueries({ queryKey: ['products'] })
+      addToast({ type: 'success', title: 'Inventory item updated successfully' })
       setIsAdjustOpen(false)
       setSelectedItem(null)
-      setAdjustForm({ quantity: '', reason: 'MANUAL', notes: '' })
       setAdjustError('')
     },
     onError: (err: any) => {
-      addToast({ type: 'error', title: err?.response?.data?.error?.message || 'Failed to adjust stock' })
+      addToast({ type: 'error', title: err?.response?.data?.error?.message || 'Failed to update inventory item' })
+    },
+  })
+
+  const deleteInventoryMutation = useMutation({
+    mutationFn: () => {
+      if (!selectedItem) throw new Error('No inventory item selected')
+      return inventoryService.deleteBranchInventory(selectedItem.id)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
+      addToast({ type: 'success', title: 'Item removed from inventory' })
+      setIsDeleteInventoryOpen(false)
+      setIsAdjustOpen(false)
+      setSelectedItem(null)
+    },
+    onError: (err: any) => {
+      addToast({ type: 'error', title: err?.response?.data?.error?.message || 'Failed to remove inventory item' })
     },
   })
 
   const addInventoryMutation = useMutation({
-    mutationFn: () => inventoryService.createBranchInventory({
-      productId: addInventoryForm.productId,
-      quantityOnHand: Number(addInventoryForm.quantityOnHand),
-    }),
+    mutationFn: async () => {
+      const skuName = addInventoryForm.itemName
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 30) || 'ITEM'
+      const product = await productService.create({
+        sku: `${skuName}-${Date.now().toString().slice(-6)}`,
+        name: addInventoryForm.itemName.trim(),
+        type: 'RAW_MATERIAL',
+        unitOfMeasure: 'piece',
+        basePrice: 0,
+        costPrice: 0,
+        reorderLevel: Number(addInventoryForm.reorderLevel),
+        isActive: true,
+      })
+
+      try {
+        return await inventoryService.createBranchInventory({
+          productId: product.id,
+          quantityOnHand: Number(addInventoryForm.quantityOnHand),
+        })
+      } catch (error) {
+        await productService.remove(product.id).catch(() => undefined)
+        throw error
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['inventory'] })
       setIsAddInventoryOpen(false)
-      setAddInventoryForm({ productId: '', quantityOnHand: '' })
+      setAddInventoryForm({ itemName: '', quantityOnHand: '', reorderLevel: '' })
       setAddInventoryError('')
       addToast({ type: 'success', title: 'Inventory added successfully' })
     },
@@ -144,8 +205,13 @@ export function InventoryPage() {
 
   const handleAddInventory = () => {
     const quantity = Number(addInventoryForm.quantityOnHand)
-    if (!addInventoryForm.productId || !Number.isInteger(quantity) || quantity < 0) {
-      setAddInventoryError('Select a product and enter a valid whole-number quantity')
+    const reorderLevel = Number(addInventoryForm.reorderLevel)
+    if (!addInventoryForm.itemName.trim()) {
+      setAddInventoryError('Enter an inventory item name')
+      return
+    }
+    if (!Number.isInteger(quantity) || quantity < 0 || !Number.isInteger(reorderLevel) || reorderLevel < 0) {
+      setAddInventoryError('Quantity and reorder level must be valid whole numbers')
       return
     }
     setAddInventoryError('')
@@ -162,11 +228,21 @@ export function InventoryPage() {
   })
 
   const updateCountMutation = useMutation({
-    mutationFn: (payload: { productId: string; requestedQuantity: number; notes?: string | null }) =>
-      inventoryService.createInventoryUpdateRequest(payload),
-    onSuccess: () => {
+    mutationFn: ({ inventoryId, quantity }: { inventoryId: string; quantity: number }) =>
+      inventoryService.updateBranchInventory(inventoryId, {
+        quantityOnHand: quantity,
+        reservedQuantity: 0,
+        lastCountedAt: new Date().toISOString(),
+      }),
+    onSuccess: (updatedItem) => {
       queryClient.invalidateQueries({ queryKey: ['inventory'] })
-      addToast({ type: 'success', title: 'Update request submitted for owner approval' })
+      const isLow = updatedItem.quantityOnHand <= updatedItem.reorderLevel
+      addToast({
+        type: isLow ? 'warning' : 'success',
+        title: isLow
+          ? 'Count updated; the owner has been notified of low stock'
+          : 'Inventory count updated successfully',
+      })
       setIsUpdateCountOpen(false)
       setSelectedItem(null)
       setUpdateCountForm({ quantity: '', notes: '' })
@@ -217,24 +293,24 @@ export function InventoryPage() {
     },
   })
 
-  const handleAdjust = () => {
+  const handleEditInventory = () => {
     if (!selectedItem) return
-    const qty = Number(adjustForm.quantity)
-    if (isNaN(qty) || qty === 0) {
-      setAdjustError('Please enter a valid quantity')
+    const quantity = Number(editInventoryForm.quantityOnHand)
+    const reorderLevel = Number(editInventoryForm.reorderLevel)
+    if (!editInventoryForm.itemName.trim()) {
+      setAdjustError('Enter an inventory item name')
       return
     }
-    if (adjustForm.reason === 'MANUAL' && qty < 0 && Math.abs(qty) > selectedItem.quantityOnHand) {
-      setAdjustError('Cannot reduce below zero')
+    if (!editInventoryForm.sku.trim()) {
+      setAdjustError('Enter an SKU')
+      return
+    }
+    if (!Number.isInteger(quantity) || quantity < 0 || !Number.isInteger(reorderLevel) || reorderLevel < 0) {
+      setAdjustError('Quantity and low-stock level must be valid whole numbers')
       return
     }
     setAdjustError('')
-    adjustMutation.mutate({
-      productId: selectedItem.productId,
-      quantity: qty,
-      reason: adjustForm.reason,
-      notes: adjustForm.notes || null,
-    })
+    editInventoryMutation.mutate()
   }
 
   const handleNotify = () => {
@@ -251,9 +327,8 @@ export function InventoryPage() {
     }
     setUpdateCountError('')
     updateCountMutation.mutate({
-      productId: selectedItem.productId,
-      requestedQuantity: qty,
-      notes: updateCountForm.notes || null,
+      inventoryId: selectedItem.id,
+      quantity: qty,
     })
   }
 
@@ -302,7 +377,6 @@ export function InventoryPage() {
     { key: 'quantityOnHand', header: 'On Hand', render: (item: InventoryItem) => (
       <div>
         <p className="font-medium">{item.quantityOnHand}</p>
-        <p className="text-xs text-gray-500 dark:text-gray-400">Available: {item.availableQuantity}</p>
       </div>
     )},
     { key: 'reorderLevel', header: 'Reorder Level' },
@@ -328,15 +402,13 @@ export function InventoryPage() {
         return (
           <div className="flex items-center gap-2">
             {isOwner && (
-              <>
-                <Button variant="ghost" size="sm" onClick={() => { setSelectedItem(item); setIsAdjustOpen(true); setAdjustForm({ quantity: '', reason: 'MANUAL', notes: '' }); setAdjustError(''); }}>
-                  <FiEdit className="w-4 h-4" />
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => { setSelectedItem(item); setIsHistoryOpen(true); refetchHistory(); }}>
-                  <FiFileText className="w-4 h-4" />
-                </Button>
-              </>
+              <Button variant="ghost" size="sm" onClick={() => { setSelectedItem(item); setIsAdjustOpen(true); setEditInventoryForm({ itemName: item.productName, sku: item.productSku, quantityOnHand: String(item.quantityOnHand), reorderLevel: String(item.reorderLevel) }); setAdjustError(''); }}>
+                <FiEdit className="w-4 h-4" />
+              </Button>
             )}
+            <Button variant="ghost" size="sm" onClick={() => { setSelectedItem(item); setIsHistoryOpen(true); refetchHistory(); }} title="View stock movement history">
+              <FiFileText className="w-4 h-4" />
+            </Button>
             {!isOwner && (
               <>
                 <Button variant="ghost" size="sm" onClick={() => { setSelectedItem(item); setIsUpdateCountOpen(true); setUpdateCountForm({ quantity: '', notes: '' }); setUpdateCountError(''); }}>
@@ -353,7 +425,7 @@ export function InventoryPage() {
         )
       },
     },
-  ], [isOwner, adjustMutation, refetchHistory])
+  ], [isOwner, refetchHistory])
 
   const items = data?.data ?? []
   const pagination = data?.meta
@@ -440,13 +512,11 @@ export function InventoryPage() {
       </div>
 
       {isOwner && gallonSummary && (
-        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
           {[
             ['Total Gallons', gallonSummary.totalOwned],
             ['At the Shop', gallonSummary.atShop],
             ['In Circulation', gallonSummary.inCirculation],
-            ['Damaged', gallonSummary.damaged],
-            ['Lost', gallonSummary.lost],
           ].map(([label, value]) => (
             <Card key={String(label)}>
               <CardContent className="py-4">
@@ -493,12 +563,12 @@ export function InventoryPage() {
       <Modal open={isAddInventoryOpen} onClose={() => setIsAddInventoryOpen(false)} title="Add Inventory" size="md">
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Product or service</label>
-            <Select
-              options={(availableProducts?.data ?? []).map((product) => ({ value: product.id, label: `${product.name} (${product.sku})` }))}
-              value={addInventoryForm.productId}
-              onChange={(event) => setAddInventoryForm({ ...addInventoryForm, productId: event.target.value })}
-              placeholder="Select a product"
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Item name</label>
+            <Input
+              value={addInventoryForm.itemName}
+              onChange={(event) => setAddInventoryForm({ ...addInventoryForm, itemName: event.target.value })}
+              placeholder="e.g. Bottle caps"
+              error={addInventoryError}
             />
           </div>
           <div>
@@ -509,7 +579,17 @@ export function InventoryPage() {
               step="1"
               value={addInventoryForm.quantityOnHand}
               onChange={(event) => setAddInventoryForm({ ...addInventoryForm, quantityOnHand: event.target.value })}
-              error={addInventoryError}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Low-stock level</label>
+            <Input
+              type="number"
+              min="0"
+              step="1"
+              value={addInventoryForm.reorderLevel}
+              onChange={(event) => setAddInventoryForm({ ...addInventoryForm, reorderLevel: event.target.value })}
+              placeholder="Notify when stock reaches this amount"
             />
           </div>
           <div className="flex justify-end gap-3">
@@ -519,61 +599,76 @@ export function InventoryPage() {
         </div>
       </Modal>
 
-      {/* Adjust Stock Modal */}
-      <Modal open={isAdjustOpen} onClose={() => { setIsAdjustOpen(false); setSelectedItem(null); }} title="Adjust Stock" size="md">
+      {/* Edit Inventory Modal */}
+      <Modal open={isAdjustOpen} onClose={() => { setIsAdjustOpen(false); setSelectedItem(null); }} title="Edit Inventory Item" size="md">
         {selectedItem && (
           <div className="space-y-4">
-            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-              <p className="font-medium text-gray-900 dark:text-white">{selectedItem.productName}</p>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Current on hand: {selectedItem.quantityOnHand}</p>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Available: {selectedItem.availableQuantity}</p>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Item name</label>
+              <Input
+                value={editInventoryForm.itemName}
+                onChange={(e) => setEditInventoryForm({ ...editInventoryForm, itemName: e.target.value })}
+                error={adjustError}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">SKU</label>
+              <Input
+                value={editInventoryForm.sku}
+                onChange={(e) => setEditInventoryForm({ ...editInventoryForm, sku: e.target.value })}
+                placeholder="e.g. CAPS-001"
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">SKU must be unique and will be saved in uppercase.</p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Quantity Change</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Quantity on hand</label>
                 <Input
                   type="number"
-                  value={adjustForm.quantity}
-                  onChange={(e) => setAdjustForm({ ...adjustForm, quantity: e.target.value })}
-                  placeholder="Enter quantity change"
-                  error={adjustError}
+                  min="0"
+                  step="1"
+                  value={editInventoryForm.quantityOnHand}
+                  onChange={(e) => setEditInventoryForm({ ...editInventoryForm, quantityOnHand: e.target.value })}
                 />
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Use negative values to deduct stock</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Reason</label>
-                <Select
-                  options={[
-                    { value: 'MANUAL', label: 'Manual Adjustment' },
-                    { value: 'OPENING_BALANCE', label: 'Opening Balance' },
-                    { value: 'DAMAGE', label: 'Damage' },
-                    { value: 'EXPIRED', label: 'Expired' },
-                    { value: 'LOST', label: 'Lost' },
-                  ]}
-                  value={adjustForm.reason}
-                  onChange={(e) => setAdjustForm({ ...adjustForm, reason: e.target.value as AdjustmentRequest['reason'] })}
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Low-stock level</label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={editInventoryForm.reorderLevel}
+                  onChange={(e) => setEditInventoryForm({ ...editInventoryForm, reorderLevel: e.target.value })}
                 />
               </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Notes</label>
-              <Input
-                value={adjustForm.notes}
-                onChange={(e) => setAdjustForm({ ...adjustForm, notes: e.target.value })}
-                placeholder="Optional notes"
-              />
-            </div>
-            <div className="flex justify-end gap-3 pt-4">
-              <Button variant="secondary" onClick={() => { setIsAdjustOpen(false); setSelectedItem(null); }} disabled={adjustMutation.isPending}>
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-between gap-3 pt-4">
+              <Button variant="danger" onClick={() => setIsDeleteInventoryOpen(true)} disabled={editInventoryMutation.isPending}>
+                <FiTrash2 className="w-4 h-4 mr-2" /> Delete Item
+              </Button>
+              <div className="flex justify-end gap-3">
+              <Button variant="secondary" onClick={() => { setIsAdjustOpen(false); setSelectedItem(null); }} disabled={editInventoryMutation.isPending}>
                 Cancel
               </Button>
-              <Button onClick={handleAdjust} loading={adjustMutation.isPending}>
-                Save Adjustment
+              <Button onClick={handleEditInventory} loading={editInventoryMutation.isPending}>
+                Save Changes
               </Button>
+              </div>
             </div>
           </div>
         )}
       </Modal>
+
+      <ConfirmDialog
+        open={isDeleteInventoryOpen}
+        onClose={() => setIsDeleteInventoryOpen(false)}
+        onConfirm={() => deleteInventoryMutation.mutate()}
+        title="Delete Inventory Item"
+        description={selectedItem ? `Remove "${selectedItem.productName}" from inventory? Historical sales will be kept.` : ''}
+        confirmText="Delete Item"
+        variant="danger"
+        loading={deleteInventoryMutation.isPending}
+      />
 
       {/* History Modal */}
       <Modal open={isHistoryOpen} onClose={() => { setIsHistoryOpen(false); setSelectedItem(null); }} title="Stock History" size="lg">
@@ -660,8 +755,7 @@ export function InventoryPage() {
             <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
               <p className="font-medium text-gray-900 dark:text-white">{selectedItem.productName}</p>
               <p className="text-sm text-gray-500 dark:text-gray-400">Current on hand: {selectedItem.quantityOnHand}</p>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Available: {selectedItem.availableQuantity}</p>
-              <p className="text-sm text-yellow-600 dark:text-yellow-400 mt-1">This request requires owner approval before updating official quantity</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Enter the physical count currently at the shop.</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Counted Quantity</label>
@@ -686,7 +780,7 @@ export function InventoryPage() {
                 Cancel
               </Button>
               <Button onClick={handleUpdateCount} loading={updateCountMutation.isPending}>
-                Submit for Approval
+                Save Count
               </Button>
             </div>
           </div>

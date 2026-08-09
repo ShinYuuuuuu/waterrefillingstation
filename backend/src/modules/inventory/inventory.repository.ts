@@ -170,7 +170,10 @@ export class InventoryRepository {
       created = await this.db.branchInventory.create({ data: input }) as BranchInventory
     }
     logger.debug('Branch inventory created/updated', { id: created.id, tenantId: ctx.tenantId })
-    return created as BranchInventory
+    return this.db.branchInventory.findUniqueOrThrow({
+      where: { id: created.id },
+      include: { product: true },
+    }) as unknown as BranchInventory
   }
 
   async updateBranchInventory(
@@ -190,7 +193,10 @@ export class InventoryRepository {
       data: input,
     })
     logger.debug('Branch inventory updated', { id, tenantId: ctx.tenantId })
-    return updated as BranchInventory
+    return this.db.branchInventory.findUniqueOrThrow({
+      where: { id: updated.id },
+      include: { product: true },
+    }) as unknown as BranchInventory
   }
 
   async removeBranchInventory(id: string, ctx: InventoryContext): Promise<BranchInventory> {
@@ -234,11 +240,11 @@ export class InventoryRepository {
       },
     })
 
-    // Filter for low stock: available_quantity (qoh - reserved) <= reorder_level
+    // The shop records its physical count directly; low stock is based on the
+    // number actually at the shop, not legacy reservation bookkeeping.
     return results.filter((inv: any) => {
-      const available = inv.quantity_on_hand - inv.reserved_quantity
       const reorderLevel = inv.product?.reorder_level ?? 0
-      return available <= reorderLevel
+      return inv.quantity_on_hand <= reorderLevel
     })
   }
 
@@ -1157,6 +1163,7 @@ export class InventoryRepository {
         where: { id: branchInventory.id },
         data: {
           quantity_on_hand: approvedQuantity,
+          reserved_quantity: 0,
           last_counted_at: new Date(),
           updated_at: new Date(),
         },

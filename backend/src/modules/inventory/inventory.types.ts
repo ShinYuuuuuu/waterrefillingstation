@@ -235,6 +235,8 @@ export interface BranchInventoryResponse {
   tenantId: string
   branchId: string
   productId: string
+  productName: string
+  productSku: string
   quantityOnHand: number
   reservedQuantity: number
   availableQuantity: number

@@ -15,6 +15,7 @@ import type {
   InventoryUpdateRequestListQuery,
   CreateInventoryUpdateRequest,
   CreateInventoryRequest,
+  UpdateInventoryRequest,
 } from '@/types/inventory'
 
 interface ApiMeta {
@@ -43,7 +44,7 @@ function toInventoryItem(raw: any, productName: string, productSku: string): Inv
     productSku: productSku ?? raw.productSku,
     quantityOnHand,
     reservedQuantity,
-    availableQuantity: quantityOnHand - reservedQuantity,
+    availableQuantity: quantityOnHand,
     reorderLevel,
     reorderQuantity: raw.reorder_quantity ?? raw.reorderQuantity ?? 1,
     lastCountedAt: raw.last_counted_at ?? raw.lastCountedAt ?? null,
@@ -77,6 +78,16 @@ export const inventoryService = {
     return toInventoryItem(raw, raw.product?.name, raw.product?.sku)
   },
 
+  async updateBranchInventory(id: string, payload: UpdateInventoryRequest): Promise<InventoryItem> {
+    const response = await apiClient.put<ApiResponse<any>>(`${API_ENDPOINTS.INVENTORY}/branch/${id}`, payload)
+    const raw = response.data.data
+    return toInventoryItem(raw, raw.productName ?? raw.product?.name, raw.productSku ?? raw.product?.sku)
+  },
+
+  async deleteBranchInventory(id: string): Promise<void> {
+    await apiClient.delete(`${API_ENDPOINTS.INVENTORY}/branch/${id}`)
+  },
+
   async listBranchInventory(query?: InventoryListQuery): Promise<InventoryListResponse> {
     const params: Record<string, unknown> = {}
     if (query?.page) params.page = query.page
@@ -106,7 +117,7 @@ export const inventoryService = {
       branchName: raw.branch_name ?? raw.branchName,
       quantityOnHand: Number(raw.quantity_on_hand ?? raw.quantityOnHand ?? 0),
       reservedQuantity: Number(raw.reserved_quantity ?? raw.reservedQuantity ?? 0),
-      availableQuantity: Number(raw.available_quantity ?? raw.availableQuantity ?? 0),
+      availableQuantity: Number(raw.quantity_on_hand ?? raw.quantityOnHand ?? raw.available_quantity ?? raw.availableQuantity ?? 0),
       reorderLevel: Number(raw.reorder_level ?? raw.reorderLevel ?? 0),
       reorderQuantity: Number(raw.reorder_quantity ?? raw.reorderQuantity ?? 1),
     }))

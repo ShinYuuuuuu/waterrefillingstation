@@ -87,9 +87,8 @@ export class InventoryService {
      let filteredData = data
      if (query.lowStock) {
        filteredData = data.filter((item) => {
-         const available = item.quantity_on_hand - item.reserved_quantity
          const reorderLevel = item.product?.reorder_level ?? 0
-         return available <= reorderLevel
+         return item.quantity_on_hand <= reorderLevel
        })
      }
 
@@ -166,6 +165,20 @@ export class InventoryService {
     }
 
     const updated = await this.repository.updateBranchInventory(id, data, ctx)
+
+    if (data.quantityOnHand !== undefined && data.quantityOnHand !== existing.quantity_on_hand) {
+      await this.repository.createLedgerEntry({
+        tenantId: ctx.tenantId,
+        branchId: existing.branch_id,
+        productId: existing.product_id,
+        movementType: 'ADJUSTMENT',
+        quantityDelta: data.quantityOnHand - existing.quantity_on_hand,
+        referenceType: 'PHYSICAL_COUNT',
+        referenceId: id,
+        notes: `Physical count updated from ${existing.quantity_on_hand} to ${data.quantityOnHand}`,
+        userId: ctx.userId,
+      })
+    }
 
     await this.logAudit({
       tenantId: ctx.tenantId,

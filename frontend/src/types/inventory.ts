@@ -31,6 +31,12 @@ export interface CreateInventoryRequest {
   reservedQuantity?: number
 }
 
+export interface UpdateInventoryRequest {
+  quantityOnHand?: number
+  reservedQuantity?: number
+  lastCountedAt?: string | null
+}
+
 export interface LowStockAlert {
   productId: string
   productName: string
