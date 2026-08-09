@@ -6,8 +6,7 @@ services:
     region: singapore
     rootDir: backend
     buildCommand: npm ci && npx prisma generate && npm run build
-    preDeployCommand: npx prisma migrate deploy && npm run db:bootstrap
-    startCommand: npm run start:prod
+    startCommand: npx prisma migrate deploy && npm run db:bootstrap && npm run start:prod
     healthCheckPath: /health
     autoDeployTrigger: commit
     envVars:
