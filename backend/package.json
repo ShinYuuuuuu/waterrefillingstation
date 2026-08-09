@@ -2,7 +2,7 @@
   "name": "wsms-backend",
   "private": true,
   "version": "0.1.0",
-  "type": "module",
+  "type": "commonjs",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
