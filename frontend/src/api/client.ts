@@ -28,6 +28,9 @@ function processQueue(error: unknown, token: string | null = null) {
 
 apiClient.interceptors.request.use(
   (config) => {
+    if (!navigator.onLine && config.method?.toLowerCase() !== 'get') {
+      return Promise.reject(new Error('You are offline. Reconnect before saving changes.'))
+    }
     const token = localStorage.getItem('access_token')
     console.log('[AUTH DEBUG] REQUEST_INTERCEPTOR', {
       url: config.url,

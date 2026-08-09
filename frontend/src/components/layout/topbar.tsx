@@ -1,9 +1,9 @@
-import { ReactNode, useState } from 'react'
+import { ReactNode, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useThemeContext } from '@/contexts/theme-context'
 import { cn } from '@/utils/cn'
 import { useAuthContext } from '@/contexts/auth-context'
-import { FiSun, FiMoon, FiSearch, FiUser, FiSettings, FiLogOut, FiChevronDown, FiUsers } from 'react-icons/fi'
+import { FiSun, FiMoon, FiSearch, FiUser, FiSettings, FiLogOut, FiChevronDown, FiUsers, FiDownload } from 'react-icons/fi'
 import { Avatar } from '@/components/ui/avatar'
 import {
   DropdownMenu,
@@ -18,11 +18,49 @@ interface TopbarProps {
   children?: ReactNode
 }
 
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
+}
+
 export function Topbar({ children }: TopbarProps) {
   const { theme, toggleTheme } = useThemeContext()
   const { user, logout } = useAuthContext()
   const [loggingOut, setLoggingOut] = useState(false)
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine)
   const navigate = useNavigate()
+
+  useEffect(() => {
+    const handleInstallPrompt = (event: Event) => {
+      event.preventDefault()
+      setInstallPrompt(event as BeforeInstallPromptEvent)
+    }
+    const handleInstalled = () => setInstallPrompt(null)
+    window.addEventListener('beforeinstallprompt', handleInstallPrompt)
+    window.addEventListener('appinstalled', handleInstalled)
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleInstallPrompt)
+      window.removeEventListener('appinstalled', handleInstalled)
+    }
+  }, [])
+
+  useEffect(() => {
+    const updateConnection = () => setIsOnline(navigator.onLine)
+    window.addEventListener('online', updateConnection)
+    window.addEventListener('offline', updateConnection)
+    return () => {
+      window.removeEventListener('online', updateConnection)
+      window.removeEventListener('offline', updateConnection)
+    }
+  }, [])
+
+  const handleInstall = async () => {
+    if (!installPrompt) return
+    await installPrompt.prompt()
+    await installPrompt.userChoice
+    setInstallPrompt(null)
+  }
 
   const handleLogout = async () => {
     setLoggingOut(true)
@@ -53,6 +91,11 @@ export function Topbar({ children }: TopbarProps) {
       </div>
 
       <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+        {!isOnline && (
+          <span className="rounded-full bg-red-100 px-2 py-1 text-xs font-semibold text-red-700 dark:bg-red-900/30 dark:text-red-300">
+            Offline
+          </span>
+        )}
         <button
           onClick={toggleTheme}
           className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -106,6 +149,15 @@ export function Topbar({ children }: TopbarProps) {
               </>
             )}
             <DropdownMenuSeparator />
+            {installPrompt && (
+              <>
+                <DropdownMenuItem onClick={handleInstall}>
+                  <FiDownload className="w-4 h-4 mr-2" />
+                  Install App
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+              </>
+            )}
             <DropdownMenuItem
               onClick={handleLogout}
               disabled={loggingOut}

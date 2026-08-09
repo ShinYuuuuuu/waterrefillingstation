@@ -1,0 +1,26 @@
+{
+  "name": "Z's Purified Drinking Water",
+  "short_name": "Z's Purified",
+  "description": "Sales, delivery, customer, and inventory management for Z's Purified Drinking Water.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f8fcff",
+  "theme_color": "#1683bd",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -66,8 +66,7 @@ docker-compose.override.yml
 *.sqlite
 *.db
 
-# Prisma
-backend/prisma/migrations/
+# Prisma migrations are deployment artifacts and must remain versioned.
 
 # Cache
 .cache/
@@ -94,6 +93,11 @@ auto-generated/
 *.mp4
 *.mov
 *.ico
+
+# PWA application icons are required by production builds.
+!frontend/public/icon-180.png
+!frontend/public/icon-192.png
+!frontend/public/icon-512.png
 
 # Binaries
 *.exe

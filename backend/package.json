@@ -11,6 +11,7 @@
     "db:generate": "prisma migrate dev",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
+    "db:bootstrap": "tsx prisma/bootstrap.ts",
     "db:studio": "prisma studio",
     "db:push": "prisma db push",
     "lint": "eslint .",
