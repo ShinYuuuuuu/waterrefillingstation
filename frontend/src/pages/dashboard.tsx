@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { PageLayout } from '@/layouts/page-layout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { StatCard } from '@/components/ui/stat-card'
@@ -11,6 +12,12 @@ import { inventoryService } from '@/services/inventory.service'
 import { FiUsers, FiPackage, FiShoppingCart, FiAlertTriangle } from 'react-icons/fi'
 
 const currency = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' })
+const compactCurrency = new Intl.NumberFormat('en-PH', {
+  style: 'currency',
+  currency: 'PHP',
+  notation: 'compact',
+  maximumFractionDigits: 1,
+})
 
 function IncomeChart({ title, subtitle, data }: { title: string; subtitle: string; data: { label: string; total: number }[] }) {
   const maximum = Math.max(...data.map((point) => point.total), 1)
@@ -26,8 +33,8 @@ function IncomeChart({ title, subtitle, data }: { title: string; subtitle: strin
             <div className="h-52 flex items-end gap-2 border-b border-gray-200 dark:border-gray-700 pt-6">
               {data.map((point) => (
                 <div key={point.label} className="group flex-1 h-full flex flex-col justify-end items-center min-w-0">
-                  <div className="opacity-0 group-hover:opacity-100 text-[10px] font-medium mb-1 whitespace-nowrap transition-opacity">
-                    {currency.format(point.total)}
+                  <div className="text-[10px] font-semibold mb-1 whitespace-nowrap text-gray-700 dark:text-gray-300">
+                    {compactCurrency.format(point.total)}
                   </div>
                   <div
                     className="w-full max-w-10 rounded-t bg-primary-500 hover:bg-primary-600 transition-all min-h-[2px]"
@@ -58,10 +65,10 @@ export function DashboardPage() {
   const isLoading = customers.isLoading || products.isLoading || summary.isLoading || recentSales.isLoading || lowStock.isLoading || trends.isLoading
 
   const stats = [
-    { title: 'Customers', value: String(customers.data?.meta.total ?? 0), description: 'Registered customers', trend: 'neutral' as const, trendValue: '', icon: <FiUsers className="w-6 h-6" /> },
-    { title: 'Products & Services', value: String(products.data?.meta.total ?? 0), description: 'Active catalog entries', trend: 'neutral' as const, trendValue: '', icon: <FiPackage className="w-6 h-6" /> },
-    { title: "Today's Sales", value: currency.format(summary.data?.totalSales ?? 0), description: `${summary.data?.totalTransactions ?? 0} transactions`, trend: 'neutral' as const, trendValue: '', icon: <FiShoppingCart className="w-6 h-6" /> },
-    { title: 'Low Inventory', value: String(lowStock.data?.length ?? 0), description: 'Items needing attention', trend: (lowStock.data?.length ? 'down' : 'neutral') as 'down' | 'neutral', trendValue: '', icon: <FiAlertTriangle className="w-6 h-6" /> },
+    { title: "Today's Sales", href: '/sales', value: currency.format(summary.data?.totalSales ?? 0), description: `${summary.data?.totalTransactions ?? 0} transactions`, trend: 'neutral' as const, trendValue: '', icon: <FiShoppingCart className="w-6 h-6" /> },
+    { title: 'Customers', href: '/customers', value: String(customers.data?.meta.total ?? 0), description: 'Registered customers', trend: 'neutral' as const, trendValue: '', icon: <FiUsers className="w-6 h-6" /> },
+    { title: 'Products & Services', href: '/products', value: String(products.data?.meta.total ?? 0), description: 'Active catalog entries', trend: 'neutral' as const, trendValue: '', icon: <FiPackage className="w-6 h-6" /> },
+    { title: 'Inventory', href: '/inventory', value: String(lowStock.data?.length ?? 0), description: 'Items needing attention', trend: (lowStock.data?.length ? 'down' : 'neutral') as 'down' | 'neutral', trendValue: '', icon: <FiAlertTriangle className="w-6 h-6" /> },
   ]
 
   if (isLoading) {
@@ -70,7 +77,13 @@ export function DashboardPage() {
 
   return (
     <PageLayout title="Dashboard" breadcrumbItems={[{ label: 'Dashboard' }]}>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">{stats.map((stat) => <StatCard key={stat.title} {...stat} />)}</div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {stats.map(({ href, ...stat }) => (
+          <Link key={stat.title} to={href} className="rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500">
+            <StatCard {...stat} className="h-full cursor-pointer transition-all hover:-translate-y-0.5 hover:border-primary-400 hover:shadow-md" />
+          </Link>
+        ))}
+      </div>
       <div className="mt-6 grid grid-cols-1 xl:grid-cols-2 gap-4">
         <IncomeChart title="Daily Sales" subtitle="Income for the last 7 days" data={trends.data?.daily ?? []} />
         <IncomeChart title="Weekly Sales" subtitle="Income for the last 8 weeks" data={trends.data?.weekly ?? []} />
