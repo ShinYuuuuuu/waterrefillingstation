@@ -26,6 +26,9 @@ export interface Customer {
   current_balance: number
   loyalty_points: number
   loyalty_tier: string | null
+  reward_purchase_progress: number
+  reward_gallon_progress: number
+  free_gallons_balance: number
   status: string
   metadata: Record<string, unknown> | null
   created_at: Date
@@ -78,6 +81,9 @@ export interface CustomerResponse {
   currentBalance: number
   loyaltyPoints: number
   loyaltyTier: string | null
+  rewardPurchaseProgress: number
+  rewardGallonProgress: number
+  freeGallonsBalance: number
   status: string
   metadata: Record<string, unknown> | null
   createdAt: string

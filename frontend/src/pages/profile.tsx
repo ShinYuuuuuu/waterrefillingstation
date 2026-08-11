@@ -10,14 +10,21 @@ import { useToast } from '@/components/ui/toast'
 import { authService } from '@/services/auth.service'
 import { FiHome, FiMail, FiSave, FiShield, FiUser } from 'react-icons/fi'
 import { useAuthContext } from '@/contexts/auth-context'
+import { useNavigate } from 'react-router-dom'
+import { FiLock } from 'react-icons/fi'
 
 export function ProfilePage() {
-  const { user, setUser } = useAuthContext()
+  const { user, setUser, logout } = useAuthContext()
+  const navigate = useNavigate()
   const canEditProfile = user?.role === 'owner' || user?.role === 'super_admin'
   const { addToast } = useToast()
   const [fullName, setFullName] = useState(user?.full_name ?? '')
   const [email, setEmail] = useState(user?.email ?? '')
   const [formError, setFormError] = useState('')
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordError, setPasswordError] = useState('')
 
   const updateProfile = useMutation({
     mutationFn: () => authService.updateProfile({
@@ -37,6 +44,18 @@ export function ProfilePage() {
     },
     onError: (error: any) => {
       setFormError(error.response?.data?.error?.message ?? 'Could not update profile')
+    },
+  })
+
+  const changePassword = useMutation({
+    mutationFn: () => authService.changePassword(currentPassword, newPassword),
+    onSuccess: async () => {
+      addToast({ type: 'success', title: 'Password changed', description: 'Sign in using your new password.' })
+      await logout()
+      navigate('/login', { replace: true })
+    },
+    onError: (error: any) => {
+      setPasswordError(error.response?.data?.error?.message ?? 'Could not change password')
     },
   })
 
@@ -81,6 +100,40 @@ export function ProfilePage() {
                 {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
                 <Button type="submit" loading={updateProfile.isPending} disabled={!fullName.trim() || !email.trim()}>
                   <FiSave className="w-4 h-4" /> Save Profile
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        )}
+
+        {canEditProfile && (
+          <Card>
+            <CardHeader><CardTitle>Change Password</CardTitle></CardHeader>
+            <CardContent>
+              <form className="space-y-4" onSubmit={(event) => {
+                event.preventDefault()
+                if (newPassword !== confirmPassword) {
+                  setPasswordError('New passwords do not match')
+                  return
+                }
+                setPasswordError('')
+                changePassword.mutate()
+              }}>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Current Password</label>
+                  <Input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} required leftIcon={<FiLock />} autoComplete="current-password" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">New Password</label>
+                  <Input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} minLength={8} required leftIcon={<FiLock />} autoComplete="new-password" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Confirm New Password</label>
+                  <Input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength={8} required leftIcon={<FiLock />} autoComplete="new-password" />
+                </div>
+                {passwordError && <p className="text-sm text-red-600 dark:text-red-400">{passwordError}</p>}
+                <Button type="submit" loading={changePassword.isPending} disabled={!currentPassword || newPassword.length < 8 || confirmPassword.length < 8}>
+                  <FiLock className="w-4 h-4" /> Change Password
                 </Button>
               </form>
             </CardContent>

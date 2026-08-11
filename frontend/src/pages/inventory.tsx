@@ -302,7 +302,7 @@ export function InventoryPage() {
       return
     }
     if (!editInventoryForm.sku.trim()) {
-      setAdjustError('Enter an SKU')
+      setAdjustError('Enter a Stock Keeping Unit')
       return
     }
     if (!Number.isInteger(quantity) || quantity < 0 || !Number.isInteger(reorderLevel) || reorderLevel < 0) {
@@ -612,13 +612,13 @@ export function InventoryPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">SKU</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Stock Keeping Unit</label>
               <Input
                 value={editInventoryForm.sku}
                 onChange={(e) => setEditInventoryForm({ ...editInventoryForm, sku: e.target.value })}
                 placeholder="e.g. CAPS-001"
               />
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">SKU must be unique and will be saved in uppercase.</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">The Stock Keeping Unit must be unique and will be saved in uppercase.</p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>

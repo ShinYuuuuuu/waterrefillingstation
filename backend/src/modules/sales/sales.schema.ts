@@ -49,6 +49,7 @@ export const createSaleSchema = z.object({
   discountTotal: decimalField.optional().default(0),
   taxTotal: decimalField.optional().default(0),
   notes: z.string().max(1000).optional().nullable(),
+  redeemFreeGallons: z.number().int().nonnegative().optional().default(0),
 })
 
 /**

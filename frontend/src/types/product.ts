@@ -17,6 +17,8 @@ export interface Product {
   depositAmount: number | null
   reorderLevel: number
   isActive: boolean
+  isStockTracked: boolean
+  isForSale: boolean
   createdAt: string
   updatedAt: string
   createdBy: string | null
@@ -28,6 +30,8 @@ export interface ProductListQuery {
   category?: string
   type?: string
   isActive?: boolean
+  isStockTracked?: boolean
+  isForSale?: boolean
   search?: string
   isContainer?: boolean
   sortBy?: 'created_at' | 'updated_at' | 'name' | 'sku'
@@ -57,6 +61,8 @@ export interface CreateProductRequest {
   depositAmount?: number | string | null
   reorderLevel?: number
   isActive?: boolean
+  isStockTracked?: boolean
+  isForSale?: boolean
   metadata?: Record<string, unknown>
 }
 

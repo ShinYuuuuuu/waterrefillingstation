@@ -34,6 +34,8 @@ export const createProductSchema = z.object({
   depositAmount: decimalField.optional().nullable(),
   reorderLevel: z.number().int().nonnegative().default(0),
   isActive: z.boolean().default(true),
+  isStockTracked: z.boolean().default(true),
+  isForSale: z.boolean().default(true),
   metadata: z.record(z.unknown()).optional(),
 })
 
@@ -54,6 +56,8 @@ export const updateProductBodySchema = z.object({
   depositAmount: decimalField.optional().nullable(),
   reorderLevel: z.number().int().nonnegative().optional(),
   isActive: z.boolean().optional(),
+  isStockTracked: z.boolean().optional(),
+  isForSale: z.boolean().optional(),
   metadata: z.record(z.unknown()).optional().nullable(),
 })
 

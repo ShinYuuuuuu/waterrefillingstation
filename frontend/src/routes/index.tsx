@@ -7,6 +7,7 @@ import { LoginPage } from '@/pages/login'
 import { DashboardRouter } from './dashboard-router'
 import { CustomersPage } from '@/pages/customers'
 import { ProductsPage } from '@/pages/products'
+import { MaintenancePage } from '@/pages/maintenance'
 import { InventoryPage } from '@/pages/inventory'
 import { SalesPage } from '@/pages/sales'
 import { DeliveriesPage } from '@/pages/deliveries'
@@ -84,6 +85,14 @@ export const AppRoutes = createBrowserRouter([
         <DashboardLayout>
           <InventoryPage />
         </DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/maintenance',
+    element: (
+      <ProtectedRoute requiredRoles={['owner', 'super_admin']}>
+        <DashboardLayout><MaintenancePage /></DashboardLayout>
       </ProtectedRoute>
     ),
   },

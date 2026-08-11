@@ -26,6 +26,8 @@ export class ProductMapper {
       depositAmount: product.deposit_amount != null ? Number(product.deposit_amount) : null,
       reorderLevel: product.reorder_level,
       isActive: product.is_active,
+      isStockTracked: product.is_stock_tracked,
+      isForSale: product.is_for_sale,
       createdAt: product.created_at.toISOString(),
       updatedAt: product.updated_at.toISOString(),
       createdBy: product.created_by,
@@ -52,7 +54,8 @@ export class ProductMapper {
       deposit_amount: data.depositAmount,
       reorder_level: data.reorderLevel ?? 0,
       is_active: data.isActive ?? true,
-      is_stock_tracked: data.type !== 'SERVICE',
+      is_stock_tracked: data.isStockTracked ?? (data.type !== 'SERVICE'),
+      is_for_sale: data.isForSale ?? true,
       created_by: context.userId,
     }
   }
@@ -68,7 +71,9 @@ export class ProductMapper {
     if (data.name !== undefined) input.name = data.name
     if (data.description !== undefined) input.description = data.description
     if (data.type !== undefined) input.type = data.type
-    if (data.type !== undefined) input.is_stock_tracked = data.type !== 'SERVICE'
+    if (data.type !== undefined && data.isStockTracked === undefined) input.is_stock_tracked = data.type !== 'SERVICE'
+    if (data.isStockTracked !== undefined) input.is_stock_tracked = data.isStockTracked
+    if (data.isForSale !== undefined) input.is_for_sale = data.isForSale
     if (data.unitOfMeasure !== undefined) input.unit_of_measure = data.unitOfMeasure
     if (data.basePrice !== undefined) input.base_price = data.basePrice
     if (data.costPrice !== undefined) input.cost_price = data.costPrice

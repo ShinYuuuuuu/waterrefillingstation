@@ -75,6 +75,7 @@ export interface CreateSaleRequest {
   discountTotal?: number
   taxTotal?: number
   notes?: string | null
+  redeemFreeGallons?: number
 }
 
 export interface CreateSaleItemRequest {

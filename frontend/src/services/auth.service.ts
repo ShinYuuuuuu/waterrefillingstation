@@ -76,10 +76,10 @@ export const authService = {
     return { access_token: response.data.data.accessToken }
   },
 
-  async changePassword(oldPassword: string, newPassword: string): Promise<void> {
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
     await apiClient.post(API_ENDPOINTS.AUTH.CHANGE_PASSWORD, {
-      old_password: oldPassword,
-      new_password: newPassword,
+      currentPassword,
+      newPassword,
     })
   },
 

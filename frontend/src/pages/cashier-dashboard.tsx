@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { PageLayout } from '@/layouts/page-layout'
 import { Card, CardContent } from '@/components/ui/card'
@@ -18,7 +18,8 @@ import { productService } from '@/services/product.service'
 import { inventoryService } from '@/services/inventory.service'
 import type { Sale, CreateSaleRequest, SaleChannel } from '@/types/sales'
 import type { DeliveryOrder } from '@/types/delivery'
-import { FiShoppingCart, FiTruck, FiAlertTriangle, FiDollarSign, FiClipboard, FiSearch } from 'react-icons/fi'
+import type { CustomerType } from '@/types/customer'
+import { FiShoppingCart, FiTruck, FiAlertTriangle, FiDollarSign, FiClipboard, FiSearch, FiGift } from 'react-icons/fi'
 
 const SALE_CHANNELS: { value: SaleChannel; label: string }[] = [
   { value: 'IN_STORE', label: 'Walk-in' },
@@ -47,11 +48,14 @@ export function CashierDashboard() {
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
   const [customerAddress, setCustomerAddress] = useState('')
+  const [newCustomerType, setNewCustomerType] = useState<CustomerType>('RETAIL')
   const [quantity, setQuantity] = useState('')
   const [selectedProductId, setSelectedProductId] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('CASH')
   const [amountPaid, setAmountPaid] = useState('')
   const [saleError, setSaleError] = useState('')
+  const [customerReward, setCustomerReward] = useState<{ balance: number; type: string; progress: number } | null>(null)
+  const [redeemFreeGallons, setRedeemFreeGallons] = useState('0')
 
   const customerDropdownRef = useRef<HTMLDivElement>(null)
 
@@ -85,10 +89,16 @@ export function CashierDashboard() {
     enabled: isCashier,
   })
 
-  const { data: customersData } = useQuery({
+  const { data: customersData, isFetching: customersLoading } = useQuery({
     queryKey: ['customers', 'search', customerSearch],
     queryFn: () => customerService.list({ search: customerSearch || undefined, limit: 10 }),
     enabled: isSaleOpen && customerSearch.length > 0,
+  })
+
+  const { data: customerPurchaseSummary, isLoading: purchaseSummaryLoading } = useQuery({
+    queryKey: ['customers', selectedCustomerId, 'purchase-summary'],
+    queryFn: () => customerService.getPurchaseSummary(selectedCustomerId!),
+    enabled: isSaleOpen && Boolean(selectedCustomerId),
   })
 
   const { data: allProducts } = useQuery({
@@ -100,11 +110,39 @@ export function CashierDashboard() {
   const customers = customersData?.data ?? []
   const allActiveProducts = allProducts?.data ?? []
 
-  const refillProducts = allActiveProducts.filter((product) => product.type !== 'SERVICE')
+  useEffect(() => {
+    if (selectedCustomerId || !customerName.trim()) return
+    const exactMatch = customers.find(
+      customer => customer.fullName.trim().toLowerCase() === customerName.trim().toLowerCase(),
+    )
+    if (!exactMatch) return
+
+    setSelectedCustomerId(exactMatch.id)
+    setCustomerPhone(exactMatch.phone)
+    setCustomerReward({
+      balance: exactMatch.freeGallonsBalance,
+      type: exactMatch.customerType,
+      progress: exactMatch.rewardGallonProgress,
+    })
+    setRedeemFreeGallons('0')
+  }, [customers, customerName, selectedCustomerId])
+
+  const refillProducts = allActiveProducts.filter((product) => product.isForSale)
   const refillProduct = refillProducts.find((product) => product.id === selectedProductId) ?? refillProducts[0] ?? null
   const refillPrice = Number(refillProduct?.basePrice ?? 0)
-  const unitPrice = refillPrice + (saleType === 'DELIVERY' ? 5 : 0)
-  const subtotal = Number(quantity || 0) * unitPrice
+  const unitPrice = refillPrice
+  const saleQuantity = Math.max(0, Number(quantity) || 0)
+  const rewardGallons = Math.min(Number(redeemFreeGallons || 0), saleQuantity, customerReward?.balance ?? 0)
+  const effectiveCustomerType = customerReward?.type ?? (customerName.trim() && !selectedCustomerId ? newCustomerType : null)
+  const rewardThreshold = effectiveCustomerType === 'RESELLER' ? 5 : 10
+  const rewardProgressIncrement = refillProduct?.unitOfMeasure.toLowerCase() === 'gallon' && !refillProduct.isContainer
+    ? Math.max(0, saleQuantity - rewardGallons)
+    : 0
+  const projectedRewardTotal = (customerReward?.progress ?? 0) + rewardProgressIncrement
+  const projectedNewFreeRefills = effectiveCustomerType ? Math.floor(projectedRewardTotal / rewardThreshold) : 0
+  const projectedRewardProgress = projectedRewardTotal % rewardThreshold
+  const projectedFreeRefillBalance = (customerReward?.balance ?? 0) + projectedNewFreeRefills - rewardGallons
+  const subtotal = Math.max(0, saleQuantity * unitPrice - rewardGallons * unitPrice)
   const change = Number(amountPaid) - subtotal
 
   const createSaleMutation = useMutation({
@@ -133,11 +171,14 @@ export function CashierDashboard() {
     setCustomerName('')
     setCustomerPhone('')
     setCustomerAddress('')
+    setNewCustomerType('RETAIL')
     setQuantity('')
       setSelectedProductId('')
     setPaymentMethod('CASH')
     setAmountPaid('')
     setSaleError('')
+    setCustomerReward(null)
+    setRedeemFreeGallons('0')
   }
 
   const handleSaveSale = async () => {
@@ -177,7 +218,7 @@ export function CashierDashboard() {
           const newCustomer = await customerService.create({
             fullName: trimmedName,
             phone: customerPhone.trim() || `N/A-${Date.now()}`,
-            customerType: 'RETAIL',
+            customerType: newCustomerType,
           })
           customerId = newCustomer.id
           setSelectedCustomerId(newCustomer.id)
@@ -211,6 +252,7 @@ export function CashierDashboard() {
         },
       ],
       notes: saleType === 'DELIVERY' ? customerAddress.trim() || null : null,
+      redeemFreeGallons: rewardGallons,
     })
   }
 
@@ -420,6 +462,8 @@ export function CashierDashboard() {
                   setCustomerName(e.target.value)
                   setCustomerSearch(e.target.value)
                   setSelectedCustomerId(null)
+                  setCustomerReward(null)
+                  setRedeemFreeGallons('0')
                 }}
                 placeholder="Search existing customer or type new name"
                 className="pl-10"
@@ -435,9 +479,12 @@ export function CashierDashboard() {
                     key={customer.id}
                     className="px-4 py-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
                     onClick={() => {
-                      setSelectedCustomerId(customer.id)
-                      setCustomerName(customer.fullName)
-                      setCustomerSearch('')
+                  setSelectedCustomerId(customer.id)
+                  setCustomerName(customer.fullName)
+                  setCustomerSearch('')
+                  setCustomerPhone(customer.phone)
+                  setCustomerReward({ balance: customer.freeGallonsBalance, type: customer.customerType, progress: customer.rewardGallonProgress })
+                  setRedeemFreeGallons('0')
                     }}
                   >
                     <p className="text-sm font-medium text-gray-900 dark:text-white">{customer.fullName}</p>
@@ -450,6 +497,87 @@ export function CashierDashboard() {
               <p className="text-xs text-red-600 mt-1">Customer name is required for delivery</p>
             )}
           </div>
+
+          {customerName.trim() && !selectedCustomerId && !customersLoading && (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50 p-3">
+              <p className="text-sm font-medium text-gray-900 dark:text-white mb-2">New customer</p>
+              <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Customer type</label>
+              <Select
+                options={[
+                  { value: 'RETAIL', label: 'Regular Customer' },
+                  { value: 'RESELLER', label: 'Reseller' },
+                ]}
+                value={newCustomerType}
+                onChange={(event) => setNewCustomerType(event.target.value as CustomerType)}
+              />
+              {saleQuantity > 0 && (
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
+                  After this sale: {projectedRewardProgress}/{newCustomerType === 'RESELLER' ? '5 gallons' : '10 gallons'}
+                </p>
+              )}
+              {projectedNewFreeRefills > 0 && (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/30 p-3 mt-2">
+                  <div className="flex items-start gap-2 text-amber-800 dark:text-amber-300">
+                    <FiGift className="w-5 h-5 mt-0.5 shrink-0" />
+                    <p className="text-sm font-semibold">
+                      This first sale will earn {projectedNewFreeRefills} free refill{projectedNewFreeRefills === 1 ? '' : 's'}.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {selectedCustomerId && customerReward && (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-800 p-3">
+              <p className="text-sm font-medium">{customerReward.type === 'RESELLER' ? 'Reseller' : 'Regular customer'}</p>
+              <p className="text-sm text-gray-700 dark:text-gray-300">
+                {purchaseSummaryLoading
+                  ? 'Loading purchase history...'
+                  : `${customerPurchaseSummary?.totalPurchases ?? 0} completed purchase(s) · ${customerPurchaseSummary?.totalGallons ?? 0} gallon(s) purchased`}
+              </p>
+              <p className="text-xs text-gray-500 mb-2">Progress: {customerReward.progress}/{customerReward.type === 'RESELLER' ? '5 gallons' : '10 gallons'}</p>
+              {saleQuantity > 0 && (
+                <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
+                  After this sale: {projectedRewardProgress}/{customerReward.type === 'RESELLER' ? '5 gallons' : '10 gallons'}
+                </p>
+              )}
+              {customerReward.balance > 0 && (
+                <div className="rounded-lg border border-green-300 bg-green-100 dark:border-green-700 dark:bg-green-900/30 p-3 mt-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-green-800 dark:text-green-300">
+                    <div className="flex items-start gap-2">
+                    <FiGift className="w-5 h-5 mt-0.5 shrink-0" />
+                    <p className="text-sm font-semibold">
+                        {rewardGallons > 0
+                          ? '1 free refill will be claimed in this sale.'
+                          : `This customer has ${customerReward.balance} free refill${customerReward.balance === 1 ? '' : 's'}.`}
+                    </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={rewardGallons > 0 ? 'secondary' : 'primary'}
+                      disabled={saleQuantity < 1}
+                      onClick={() => setRedeemFreeGallons(rewardGallons > 0 ? '0' : '1')}
+                    >
+                      {rewardGallons > 0 ? 'Undo claim' : 'Claim 1 free refill'}
+                    </Button>
+                  </div>
+                  {saleQuantity < 1 && <p className="text-xs mt-2 text-green-700 dark:text-green-400">Enter at least 1 gallon to claim the free refill.</p>}
+                </div>
+              )}
+              {projectedNewFreeRefills > 0 && (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/30 p-3 mt-2">
+                  <div className="flex items-start gap-2 text-amber-800 dark:text-amber-300">
+                    <FiGift className="w-5 h-5 mt-0.5 shrink-0" />
+                    <p className="text-sm font-semibold">
+                      This sale will earn {projectedNewFreeRefills} new free refill{projectedNewFreeRefills === 1 ? '' : 's'}. The customer will have {projectedFreeRefillBalance} after saving.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {saleType === 'DELIVERY' && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -484,12 +612,12 @@ export function CashierDashboard() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Refill Price</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Product Price</label>
               <div className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 px-4 py-2 text-gray-900 dark:text-white">
                 ₱{refillPrice.toFixed(2)} / gallon
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                {saleType === 'DELIVERY' ? '₱20 refill + ₱5 delivery per gallon' : '₱20 per gallon'}
+                Uses the configured price for the selected product or service.
               </p>
             </div>
           </div>

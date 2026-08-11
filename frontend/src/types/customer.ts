@@ -23,6 +23,9 @@ export interface Customer {
   currentBalance: number
   loyaltyPoints: number
   loyaltyTier: string | null
+  rewardPurchaseProgress: number
+  rewardGallonProgress: number
+  freeGallonsBalance: number
   status: string
   metadata: Record<string, unknown> | null
   createdAt: string

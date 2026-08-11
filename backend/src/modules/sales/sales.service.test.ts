@@ -163,19 +163,49 @@ describe('SaleService', () => {
       expect(sale.grandTotal).toBe(40)
     })
 
-    it('should apply delivery refill price (25) for SERVICE items', async () => {
+    it('should use the configured product price for delivery SERVICE items', async () => {
       const sale = await saleService.createSale(
         {
           channel: 'DELIVERY',
           items: [{ productId: 'svc-prod-1', productName: 'Water Refill', quantity: 2, unitPrice: 0 }],
-          payments: [{ amount: 50, method: 'CASH' }],
+          payments: [{ amount: 40, method: 'CASH' }],
         },
         baseCtx,
       )
 
       expect(sale.items).toHaveLength(1)
-      expect(sale.items[0].unitPrice).toBe(25)
-      expect(sale.grandTotal).toBe(50)
+      expect(sale.items[0].unitPrice).toBe(20)
+      expect(sale.grandTotal).toBe(40)
+    })
+
+    it('should give a reseller one free refill for every 5 paid gallons', async () => {
+      const customer = await prisma.customer.create({
+        data: {
+          tenant_id: TENANT_ID,
+          branch_id: BRANCH_ID,
+          customer_type: 'RESELLER',
+          full_name: 'Test Reseller',
+          phone: '+639111111111',
+        },
+      })
+
+      await saleService.createSale({
+        channel: 'IN_STORE',
+        customerId: customer.id,
+        items: [{ productId: 'svc-prod-1', productName: 'Water Refill', quantity: 3, unitPrice: 20 }],
+        payments: [{ amount: 60, method: 'CASH' }],
+      }, baseCtx)
+
+      await saleService.createSale({
+        channel: 'IN_STORE',
+        customerId: customer.id,
+        items: [{ productId: 'svc-prod-1', productName: 'Water Refill', quantity: 2, unitPrice: 20 }],
+        payments: [{ amount: 40, method: 'CASH' }],
+      }, baseCtx)
+
+      const updated = await prisma.customer.findUniqueOrThrow({ where: { id: customer.id } })
+      expect(updated.reward_gallon_progress).toBe(0)
+      expect(updated.free_gallons_balance).toBe(1)
     })
 
     it('should allow mixed transactions (refill + gallon)', async () => {

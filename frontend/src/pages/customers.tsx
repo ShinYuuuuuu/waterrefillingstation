@@ -178,6 +178,18 @@ export function CustomersPage() {
       ),
     },
     {
+      key: 'customerType',
+      header: 'Type',
+      render: (item: Customer) => <Badge variant={item.customerType === 'RESELLER' ? 'info' : 'default'}>{item.customerType === 'RESELLER' ? 'Reseller' : 'Regular'}</Badge>,
+    },
+    {
+      key: 'rewards',
+      header: 'Free Gallons',
+      render: (item: Customer) => (
+        <div><strong>{item.freeGallonsBalance}</strong><p className="text-xs text-gray-500">Progress: {item.rewardGallonProgress}/{item.customerType === 'RESELLER' ? '5 gallons' : '10 gallons'}</p></div>
+      ),
+    },
+    {
       key: 'totalPurchases',
       header: 'Total Purchases',
       render: (item: Customer) => purchaseSummaryQueries.data?.[item.id]?.totalPurchases ?? 0,

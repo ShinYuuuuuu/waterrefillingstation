@@ -12,6 +12,7 @@ import {
   FiMenu,
   FiX,
   FiChevronLeft,
+  FiTool,
 } from 'react-icons/fi'
 import type { UserRole } from '@/types'
 import { APP_LOGO_URL, APP_SHORT_NAME } from '@/constants'
@@ -55,6 +56,12 @@ const menuItems: MenuItem[] = [
     label: 'Sales',
     icon: FiShoppingCart,
     roles: ['owner', 'cashier', 'super_admin'],
+  },
+  {
+    href: '/maintenance',
+    label: 'Maintenance',
+    icon: FiTool,
+    roles: ['owner', 'super_admin'],
   },
   {
     href: '/deliveries',

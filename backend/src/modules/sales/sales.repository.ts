@@ -144,6 +144,7 @@ export class SaleRepository {
           discount_total: data.discountTotal ?? 0,
           tax_total: data.taxTotal ?? 0,
           grand_total: data.items.reduce((sum: number, item: CreateSaleItemRequest) => sum + item.quantity * item.unitPrice, 0) - (data.discountTotal ?? 0) + (data.taxTotal ?? 0),
+          reward_gallons_redeemed: data.redeemFreeGallons ?? 0,
           notes: data.notes ?? null,
           created_by: ctx.userId,
         },

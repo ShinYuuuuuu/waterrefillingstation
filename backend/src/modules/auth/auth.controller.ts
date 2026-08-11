@@ -168,6 +168,43 @@ export const authController = {
     }
   },
 
+  async changePassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.userId || !req.tenantId) {
+        throw new AppError(401, 'Authentication required')
+      }
+
+      const { currentPassword, newPassword } = req.validatedBody as {
+        currentPassword: string
+        newPassword: string
+      }
+      const user = await prisma.user.findFirst({
+        where: { id: req.userId, tenant_id: req.tenantId, deleted_at: null },
+      })
+      if (!user) throw new AppError(404, 'User not found')
+
+      const passwordMatches = await bcrypt.compare(currentPassword, user.password_hash)
+      if (!passwordMatches) throw new AppError(400, 'Current password is incorrect')
+      if (await bcrypt.compare(newPassword, user.password_hash)) {
+        throw new AppError(400, 'New password must be different from the current password')
+      }
+
+      const passwordHash = await bcrypt.hash(newPassword, config.bcryptRounds)
+      await prisma.$transaction([
+        prisma.user.update({
+          where: { id: user.id },
+          data: { password_hash: passwordHash, updated_at: new Date() },
+        }),
+        prisma.refreshToken.deleteMany({ where: { user_id: user.id } }),
+      ])
+
+      logger.info('Owner changed password', { userId: user.id })
+      return res.status(200).json(successResponse({ message: 'Password changed successfully' }))
+    } catch (error) {
+      next(error)
+    }
+  },
+
   async listStaffAccounts(req: Request, res: Response, next: NextFunction) {
     try {
       if (!req.tenantId) throw new AppError(401, 'Authentication required')

@@ -5,7 +5,7 @@ import { securityHeaders } from '../../middleware/security'
 import { tenantIsolation } from '../../middleware/tenantIsolation'
 import { authenticateToken, requireRole } from '../../middleware/authJwt'
 import { validateRequest } from '../../middleware/validateRequest'
-import { updateProfileSchema, updateStaffAccountSchema } from './auth.schema'
+import { changePasswordSchema, updateProfileSchema, updateStaffAccountSchema } from './auth.schema'
 
 export const authRoutes = Router()
 
@@ -23,6 +23,13 @@ authRoutes.put(
   requireRole('owner', 'super_admin'),
   validateRequest(updateProfileSchema),
   authController.updateMe,
+)
+authRoutes.post(
+  '/change-password',
+  authenticateToken,
+  requireRole('owner', 'super_admin'),
+  validateRequest(changePasswordSchema),
+  authController.changePassword,
 )
 authRoutes.get('/staff-accounts', authenticateToken, requireRole('owner', 'super_admin'), authController.listStaffAccounts)
 authRoutes.put(

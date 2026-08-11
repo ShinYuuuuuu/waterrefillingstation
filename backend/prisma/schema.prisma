@@ -8,73 +8,76 @@ datasource db {
 }
 
 model Tenant {
-  id                  String             @id @default(uuid())
-  name                String
-  subscription_plan   String?
-  subscription_status String?
-  is_active           Boolean            @default(true)
-  created_at          DateTime           @default(now()) @db.Timestamp(6)
-  updated_at          DateTime           @default(now()) @db.Timestamp(6)
-  deleted_at          DateTime?          @db.Timestamp(6)
-  created_by          String?
-  audit_logs          AuditLog[]
-  backups             Backup[]
-  branch_inventories  BranchInventory[]
-  branches            Branch[]
-  customers           Customer[]
-  delivery_orders     DeliveryOrder[]
-  integrations        Integration[]
-  inventory_ledgers   InventoryLedger[]
+  id                        String                   @id @default(uuid())
+  name                      String
+  subscription_plan         String?
+  subscription_status       String?
+  is_active                 Boolean                  @default(true)
+  created_at                DateTime                 @default(now()) @db.Timestamp(6)
+  updated_at                DateTime                 @default(now()) @db.Timestamp(6)
+  deleted_at                DateTime?                @db.Timestamp(6)
+  created_by                String?
+  audit_logs                AuditLog[]
+  backups                   Backup[]
+  branch_inventories        BranchInventory[]
+  branches                  Branch[]
+  customers                 Customer[]
+  delivery_orders           DeliveryOrder[]
+  integrations              Integration[]
+  maintenance_schedules     MaintenanceSchedule[]
+  maintenance_completions   MaintenanceCompletion[]
+  inventory_ledgers         InventoryLedger[]
   inventory_update_requests InventoryUpdateRequest[]
-  notifications       Notification[]
-  permissions         Permission[]
-  product_categories  ProductCategory[]
-  products            Product[]
-  roles               Role[]
-  sales_transactions  SalesTransaction[]
-  settings            Setting[]
-  users               User[]
+  notifications             Notification[]
+  permissions               Permission[]
+  product_categories        ProductCategory[]
+  products                  Product[]
+  roles                     Role[]
+  sales_transactions        SalesTransaction[]
+  settings                  Setting[]
+  users                     User[]
 
   @@map("tenants")
 }
 
 model Branch {
-  id                     String               @id @default(uuid())
-  tenant_id              String
-  name                   String
-  address                String?
-  contact_number         String?
-  email                  String?
-  tin                    String?
-  is_hq                  Boolean              @default(false)
-  is_active              Boolean              @default(true)
-  business_hours         Json?
-  created_at             DateTime             @default(now()) @db.Timestamp(6)
-  updated_at             DateTime             @default(now()) @db.Timestamp(6)
-  deleted_at             DateTime?            @db.Timestamp(6)
-  created_by             String?
-  branch_inventories     BranchInventory[]
-  tenant                 Tenant               @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  container_movements    ContainerMovement[]
-  customer_ledgers       CustomerLedger[]
-  customers              Customer[]
-  delivery_orders        DeliveryOrder[]
-  delivery_routes        DeliveryRoute[]
-  equipment              Equipment[]
-  gallons                Gallon[]
-  installment_plans      InstallmentPlan[]
-  inventory_ledgers      InventoryLedger[]
+  id                        String                   @id @default(uuid())
+  tenant_id                 String
+  name                      String
+  address                   String?
+  contact_number            String?
+  email                     String?
+  tin                       String?
+  is_hq                     Boolean                  @default(false)
+  is_active                 Boolean                  @default(true)
+  business_hours            Json?
+  created_at                DateTime                 @default(now()) @db.Timestamp(6)
+  updated_at                DateTime                 @default(now()) @db.Timestamp(6)
+  deleted_at                DateTime?                @db.Timestamp(6)
+  created_by                String?
+  branch_inventories        BranchInventory[]
+  tenant                    Tenant                   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  container_movements       ContainerMovement[]
+  customer_ledgers          CustomerLedger[]
+  customers                 Customer[]
+  delivery_orders           DeliveryOrder[]
+  delivery_routes           DeliveryRoute[]
+  equipment                 Equipment[]
+  gallons                   Gallon[]
+  installment_plans         InstallmentPlan[]
+  inventory_ledgers         InventoryLedger[]
   inventory_update_requests InventoryUpdateRequest[]
-  production_batches     ProductionBatch[]
-  rider_shifts           RiderShift[]
-  sales_transactions     SalesTransaction[]
-  settings               Setting[]
-  shifts                 Shift[]
-  stock_count_sessions   StockCountSession[]
-  stock_transfers_dest   StockTransfer[]      @relation("StockTransferDestination")
-  stock_transfers_origin StockTransfer[]      @relation("StockTransferOrigin")
-  user_role_assignments  UserRoleAssignment[]
-  users                  User[]
+  maintenance_schedules     MaintenanceSchedule[]
+  production_batches        ProductionBatch[]
+  rider_shifts              RiderShift[]
+  sales_transactions        SalesTransaction[]
+  settings                  Setting[]
+  shifts                    Shift[]
+  stock_count_sessions      StockCountSession[]
+  stock_transfers_dest      StockTransfer[]          @relation("StockTransferDestination")
+  stock_transfers_origin    StockTransfer[]          @relation("StockTransferOrigin")
+  user_role_assignments     UserRoleAssignment[]
+  users                     User[]
 
   @@map("branches")
 }
@@ -338,6 +341,7 @@ model Product {
   reorder_level                         Int                                 @default(0)
   is_active                             Boolean                             @default(true)
   is_stock_tracked                      Boolean                             @default(true)
+  is_for_sale                           Boolean                             @default(true)
   created_at                            DateTime                            @default(now()) @db.Timestamp(6)
   updated_at                            DateTime                            @default(now()) @db.Timestamp(6)
   deleted_at                            DateTime?                           @db.Timestamp(6)
@@ -409,25 +413,25 @@ model InventoryLedger {
 }
 
 model InventoryUpdateRequest {
-  id                String                   @id @default(uuid())
-  tenant_id         String
-  branch_id         String
-  product_id        String
-  requested_by      String
-  approved_by       String?
-  previous_quantity Int
+  id                 String                       @id @default(uuid())
+  tenant_id          String
+  branch_id          String
+  product_id         String
+  requested_by       String
+  approved_by        String?
+  previous_quantity  Int
   requested_quantity Int
-  approved_quantity Int?
-  notes             String?
-  status            InventoryUpdateRequestStatus @default(PENDING)
-  reviewed_at       DateTime?                @db.Timestamp(6)
-  created_at       DateTime                 @default(now()) @db.Timestamp(6)
-  updated_at       DateTime                 @default(now()) @db.Timestamp(6)
-  deleted_at       DateTime?                @db.Timestamp(6)
+  approved_quantity  Int?
+  notes              String?
+  status             InventoryUpdateRequestStatus @default(PENDING)
+  reviewed_at        DateTime?                    @db.Timestamp(6)
+  created_at         DateTime                     @default(now()) @db.Timestamp(6)
+  updated_at         DateTime                     @default(now()) @db.Timestamp(6)
+  deleted_at         DateTime?                    @db.Timestamp(6)
 
-  branch    Branch    @relation(fields: [branch_id], references: [id], onDelete: Cascade)
-  product   Product   @relation(fields: [product_id], references: [id], onDelete: Cascade)
-  tenant    Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  branch  Branch  @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  tenant  Tenant  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
   @@index([tenant_id, branch_id, product_id])
   @@index([status])
@@ -738,42 +742,45 @@ model StockCountItem {
 }
 
 model Customer {
-  id                   String                     @id @default(uuid())
-  tenant_id            String
-  branch_id            String
-  customer_type        CustomerType               @default(RETAIL)
-  full_name            String
-  company_name         String?
-  phone                String
-  email                String?
-  tin                  String?
-  credit_limit         Decimal                    @default(0) @db.Decimal(12, 2)
-  current_balance      Decimal                    @default(0) @db.Decimal(12, 2)
-  loyalty_points       Int                        @default(0)
-  loyalty_tier         String?
-  status               String                     @default("active")
-  metadata             Json?
-  created_at           DateTime                   @default(now()) @db.Timestamp(6)
-  updated_at           DateTime                   @default(now()) @db.Timestamp(6)
-  deleted_at           DateTime?                  @db.Timestamp(6)
-  created_by           String?
-  container_deposits   ContainerDeposit[]
-  addresses            CustomerAddress[]
-  complaints           CustomerComplaint[]
-  container_balances   CustomerContainerBalance[]
-  ledger_entries       CustomerLedger[]
-  statements           CustomerStatement[]
-  tags                 CustomerTag[]
-  branch               Branch                     @relation(fields: [branch_id], references: [id])
-  tenant               Tenant                     @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  delivery_orders      DeliveryOrder[]
-  installment_plans    InstallmentPlan[]
-  loyalty_transactions LoyaltyTransaction[]
-  payments             Payment[]
-  refunds              Refund[]
-  reseller             Reseller?
-  sales_transactions   SalesTransaction[]
-  standing_orders      StandingOrder[]
+  id                       String                     @id @default(uuid())
+  tenant_id                String
+  branch_id                String
+  customer_type            CustomerType               @default(RETAIL)
+  full_name                String
+  company_name             String?
+  phone                    String
+  email                    String?
+  tin                      String?
+  credit_limit             Decimal                    @default(0) @db.Decimal(12, 2)
+  current_balance          Decimal                    @default(0) @db.Decimal(12, 2)
+  loyalty_points           Int                        @default(0)
+  loyalty_tier             String?
+  reward_purchase_progress Int                        @default(0)
+  reward_gallon_progress   Int                        @default(0)
+  free_gallons_balance     Int                        @default(0)
+  status                   String                     @default("active")
+  metadata                 Json?
+  created_at               DateTime                   @default(now()) @db.Timestamp(6)
+  updated_at               DateTime                   @default(now()) @db.Timestamp(6)
+  deleted_at               DateTime?                  @db.Timestamp(6)
+  created_by               String?
+  container_deposits       ContainerDeposit[]
+  addresses                CustomerAddress[]
+  complaints               CustomerComplaint[]
+  container_balances       CustomerContainerBalance[]
+  ledger_entries           CustomerLedger[]
+  statements               CustomerStatement[]
+  tags                     CustomerTag[]
+  branch                   Branch                     @relation(fields: [branch_id], references: [id])
+  tenant                   Tenant                     @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  delivery_orders          DeliveryOrder[]
+  installment_plans        InstallmentPlan[]
+  loyalty_transactions     LoyaltyTransaction[]
+  payments                 Payment[]
+  refunds                  Refund[]
+  reseller                 Reseller?
+  sales_transactions       SalesTransaction[]
+  standing_orders          StandingOrder[]
 
   @@index([tenant_id, branch_id])
   @@index([phone])
@@ -963,38 +970,39 @@ model Shift {
 }
 
 model SalesTransaction {
-  id                  String                              @id @default(uuid())
-  tenant_id           String
-  branch_id           String
-  shift_id            String?
-  customer_id         String?
-  invoice_number      String
-  invoice_type        InvoiceType                         @default(OFFICIAL_RECEIPT)
-  channel             String
-  subtotal            Decimal                             @db.Decimal(12, 2)
-  discount_total      Decimal                             @default(0) @db.Decimal(12, 2)
-  tax_total           Decimal                             @default(0) @db.Decimal(12, 2)
-  grand_total         Decimal                             @db.Decimal(12, 2)
-  status              SalesTransactionStatus              @default(COMPLETED)
-  void_reason         String?
-  voided_by           String?
-  voided_at           DateTime?                           @db.Timestamp(6)
-  idempotency_key     String?                             @unique
-  notes               String?
-  created_by          String
-  created_at          DateTime                            @default(now()) @db.Timestamp(6)
-  updated_at          DateTime                            @default(now()) @db.Timestamp(6)
-  deleted_at          DateTime?                           @db.Timestamp(6)
-  delivery_orders     DeliveryOrder[]
-  payments            Payment[]
-  container_exchanges SalesTransactionContainerExchange[]
-  items               SalesTransactionItem[]
-  void_history        SalesTransactionVoid[]
-  branch              Branch                              @relation(fields: [branch_id], references: [id], onDelete: Cascade)
-  user                User                                @relation("SalesTransactionUser", fields: [created_by], references: [id])
-  customer            Customer?                           @relation(fields: [customer_id], references: [id])
-  shift               Shift?                              @relation(fields: [shift_id], references: [id])
-  tenant              Tenant                              @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  id                      String                              @id @default(uuid())
+  tenant_id               String
+  branch_id               String
+  shift_id                String?
+  customer_id             String?
+  invoice_number          String
+  invoice_type            InvoiceType                         @default(OFFICIAL_RECEIPT)
+  channel                 String
+  subtotal                Decimal                             @db.Decimal(12, 2)
+  discount_total          Decimal                             @default(0) @db.Decimal(12, 2)
+  tax_total               Decimal                             @default(0) @db.Decimal(12, 2)
+  grand_total             Decimal                             @db.Decimal(12, 2)
+  reward_gallons_redeemed Int                                 @default(0)
+  status                  SalesTransactionStatus              @default(COMPLETED)
+  void_reason             String?
+  voided_by               String?
+  voided_at               DateTime?                           @db.Timestamp(6)
+  idempotency_key         String?                             @unique
+  notes                   String?
+  created_by              String
+  created_at              DateTime                            @default(now()) @db.Timestamp(6)
+  updated_at              DateTime                            @default(now()) @db.Timestamp(6)
+  deleted_at              DateTime?                           @db.Timestamp(6)
+  delivery_orders         DeliveryOrder[]
+  payments                Payment[]
+  container_exchanges     SalesTransactionContainerExchange[]
+  items                   SalesTransactionItem[]
+  void_history            SalesTransactionVoid[]
+  branch                  Branch                              @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+  user                    User                                @relation("SalesTransactionUser", fields: [created_by], references: [id])
+  customer                Customer?                           @relation(fields: [customer_id], references: [id])
+  shift                   Shift?                              @relation(fields: [shift_id], references: [id])
+  tenant                  Tenant                              @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
   @@unique([branch_id, invoice_number])
   @@index([tenant_id, branch_id, created_at])
@@ -1557,6 +1565,45 @@ model MaintenanceLog {
 
   @@index([equipment_id, performed_at])
   @@map("maintenance_logs")
+}
+
+model MaintenanceSchedule {
+  id                String                  @id @default(uuid())
+  tenant_id         String
+  branch_id         String
+  name              String
+  trigger_type      String
+  gallon_interval   Int?
+  day_interval      Int?
+  baseline_gallons  Int                     @default(0)
+  last_completed_at DateTime?               @db.Timestamp(6)
+  notes             String?
+  is_active         Boolean                 @default(true)
+  created_by        String
+  created_at        DateTime                @default(now()) @db.Timestamp(6)
+  updated_at        DateTime                @default(now()) @db.Timestamp(6)
+  completions       MaintenanceCompletion[]
+  tenant            Tenant                  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  branch            Branch                  @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, branch_id, is_active])
+  @@map("maintenance_schedules")
+}
+
+model MaintenanceCompletion {
+  id                         String              @id @default(uuid())
+  tenant_id                  String
+  schedule_id                String
+  performed_by               String
+  performed_at               DateTime            @default(now()) @db.Timestamp(6)
+  gallon_count_at_completion Int
+  notes                      String?
+  created_at                 DateTime            @default(now()) @db.Timestamp(6)
+  schedule                   MaintenanceSchedule @relation(fields: [schedule_id], references: [id], onDelete: Cascade)
+  tenant                     Tenant              @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([schedule_id, performed_at])
+  @@map("maintenance_completions")
 }
 
 model Notification {

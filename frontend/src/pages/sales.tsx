@@ -293,9 +293,7 @@ export function SalesPage() {
                   const items = formData.items.map((item) => {
                     const product = productOptions?.data.find((option) => option.id === item.productId)
                     if (!product) return item
-                    const price = Number(product.basePrice) +
-                      (channel === 'DELIVERY' && product.sku === 'WATER-5G-REFILL' ? 5 : 0)
-                    return { ...item, unitPrice: String(price) }
+                    return { ...item, unitPrice: String(product.basePrice) }
                   })
                   setFormData({ ...formData, channel, items })
                 }}
@@ -347,10 +345,7 @@ export function SalesPage() {
                       const product = productOptions?.data.find((option) => option.id === event.target.value)
                       if (!product) return
                       const newItems = [...formData.items]
-                      const deliveryPrice = formData.channel === 'DELIVERY' && product.sku === 'WATER-5G-REFILL'
-                        ? Number(product.basePrice) + 5
-                        : Number(product.basePrice)
-                      newItems[index] = { ...newItems[index], productId: product.id, productName: product.name, unitPrice: String(deliveryPrice) }
+                      newItems[index] = { ...newItems[index], productId: product.id, productName: product.name, unitPrice: String(product.basePrice) }
                       setFormData({ ...formData, items: newItems })
                     }}
                     placeholder="Select product"

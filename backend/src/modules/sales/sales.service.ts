@@ -38,9 +38,8 @@ export class SaleService {
    * Create a new sale within the caller's tenant and branch.
    *
    * Business rules:
-   *  - Walk-in refill = ₱20/gallon
-   *  - Delivery refill = ₱25/gallon
-   *  - Empty gallon = configurable price (from product base_price)
+   *  - Every item uses its configured product base price
+   *  - Delivery prices may be configured as separate products/services
    *  - Mixed transactions allowed (refill + gallon in one sale)
    *  - Cash payment only
    *  - amount_paid >= total
@@ -59,9 +58,10 @@ export class SaleService {
       throw new AppError(httpStatus.BAD_REQUEST, 'At least one payment is required')
     }
 
+    let customer: any = null
     // Validate customer if provided
     if (data.customerId) {
-      const customer = await prisma.customer.findFirst({
+      customer = await prisma.customer.findFirst({
         where: { id: data.customerId, tenant_id: ctx.tenantId, deleted_at: null },
       })
       if (!customer) {
@@ -72,7 +72,7 @@ export class SaleService {
     // Validate products and enforce pricing rules
     const productIds = data.items.map((item) => item.productId)
     const products = await prisma.product.findMany({
-      where: { id: { in: productIds }, tenant_id: ctx.tenantId, deleted_at: null },
+      where: { id: { in: productIds }, tenant_id: ctx.tenantId, deleted_at: null, is_active: true, is_for_sale: true },
     })
 
     if (products.length !== productIds.length) {
@@ -88,14 +88,9 @@ export class SaleService {
         throw new NotFoundError('Product')
       }
 
-      // A refill costs the configured base price (₱20). Delivery adds ₱5 to
-      // every gallon, rather than adding one delivery fee per transaction.
-      // Product names and SKUs are owner-editable, so identify refill entries
-      // by their stable SERVICE type instead of a hard-coded SKU.
-      const isWaterRefill = (product as any).type === 'SERVICE' ||
-        ((product as any).unit_of_measure?.toLowerCase() === 'gallon' && !(product as any).is_container)
-      const unitPrice = Number((product as any).base_price) +
-        (data.channel === 'DELIVERY' && isWaterRefill ? 5 : 0)
+      // The owner controls pricing through the selected product or service.
+      // Delivery does not add an automatic surcharge because its cost may vary.
+      const unitPrice = Number((product as any).base_price)
 
       processedItems.push({
         ...item,
@@ -105,7 +100,18 @@ export class SaleService {
 
     // Calculate totals
     const subtotal = processedItems.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0)
-    const discountTotal = data.discountTotal ?? 0
+    const gallonItems = processedItems.filter((item) => {
+      const product = productMap.get(item.productId) as any
+      return product?.unit_of_measure?.toLowerCase() === 'gallon' && !product?.is_container
+    })
+    const gallonQuantity = gallonItems.reduce((sum, item) => sum + item.quantity, 0)
+    const redeemFreeGallons = data.redeemFreeGallons ?? 0
+    if (redeemFreeGallons > 0 && !customer) throw new AppError(httpStatus.BAD_REQUEST, 'Select a customer to redeem free gallons')
+    if (redeemFreeGallons > (customer?.free_gallons_balance ?? 0)) throw new AppError(httpStatus.BAD_REQUEST, 'Customer does not have enough free gallons')
+    if (redeemFreeGallons > gallonQuantity) throw new AppError(httpStatus.BAD_REQUEST, 'Free gallons cannot exceed gallons in this sale')
+    const rewardUnitPrice = gallonItems[0]?.unitPrice ?? 0
+    const rewardDiscount = redeemFreeGallons * rewardUnitPrice
+    const discountTotal = (data.discountTotal ?? 0) + rewardDiscount
     const taxTotal = data.taxTotal ?? 0
     const grandTotal = subtotal - discountTotal + taxTotal
 
@@ -147,11 +153,36 @@ export class SaleService {
     // Create the sale via repository
     const createData: CreateSaleRequest = {
       ...data,
+      discountTotal,
       items: processedItems,
       payments: data.payments.map((p) => ({ ...p, amount: p.amount })),
     }
 
     const createdSale = await this.repository.create(createData, ctx)
+
+    if (customer) {
+      const paidGallons = Math.max(0, gallonQuantity - redeemFreeGallons)
+      if (customer.customer_type === 'RESELLER') {
+        const progress = customer.reward_gallon_progress + paidGallons
+        await prisma.customer.update({
+          where: { id: customer.id },
+          data: {
+            reward_purchase_progress: 0,
+            reward_gallon_progress: progress % 5,
+            free_gallons_balance: { increment: Math.floor(progress / 5) - redeemFreeGallons },
+          },
+        })
+      } else {
+        const progress = customer.reward_gallon_progress + paidGallons
+        await prisma.customer.update({
+          where: { id: customer.id },
+          data: {
+            reward_gallon_progress: progress % 10,
+            free_gallons_balance: { increment: Math.floor(progress / 10) - redeemFreeGallons },
+          },
+        })
+      }
+    }
 
     // Create the rider order on the server so every cashier entry point sends
     // delivery sales to the rider queue.

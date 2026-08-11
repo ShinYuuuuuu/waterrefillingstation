@@ -16,7 +16,7 @@ import type { Product, ProductType, CreateProductRequest, UpdateProductRequest }
 import { useToast } from '@/components/ui/toast'
 
 const PRODUCT_TYPES = [
-  { value: 'FINISHED_GOOD', label: 'Water / Stocked Product' },
+  { value: 'FINISHED_GOOD', label: 'Stocked Product' },
   { value: 'SERVICE', label: 'Service' },
 ] as const
 
@@ -51,6 +51,8 @@ export function ProductsPage() {
     depositAmount?: number | string | null
     reorderLevel: number | string
     isActive: boolean
+    isStockTracked: boolean
+    isForSale: boolean
   }>({
     categoryId: '',
     sku: '',
@@ -62,6 +64,8 @@ export function ProductsPage() {
     isContainer: false,
     reorderLevel: '',
     isActive: true,
+    isStockTracked: true,
+    isForSale: true,
   })
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
 
@@ -160,6 +164,8 @@ export function ProductsPage() {
       isContainer: false,
       reorderLevel: '',
       isActive: true,
+      isStockTracked: true,
+      isForSale: true,
     })
     setFormErrors({})
   }
@@ -185,6 +191,8 @@ export function ProductsPage() {
       depositAmount: product.depositAmount,
       reorderLevel: product.reorderLevel,
       isActive: product.isActive,
+      isStockTracked: product.isStockTracked,
+      isForSale: product.isForSale,
     })
     setFormErrors({})
     setIsFormOpen(true)
@@ -192,7 +200,7 @@ export function ProductsPage() {
 
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {}
-    if (!formData.sku.trim()) errors.sku = 'SKU is required'
+    if (!formData.sku.trim()) errors.sku = 'Stock Keeping Unit is required'
     if (!formData.name.trim()) errors.name = 'Product name is required'
     if (!formData.unitOfMeasure.trim()) errors.unitOfMeasure = 'Unit of measure is required'
     setFormErrors(errors)
@@ -218,6 +226,8 @@ export function ProductsPage() {
       depositAmount: null,
       reorderLevel: toNumber(formData.reorderLevel),
       isActive: formData.isActive,
+      isStockTracked: formData.isStockTracked,
+      isForSale: formData.isForSale,
     }
     if (editingProduct) {
       return { ...base, categoryId: formData.categoryId || undefined }
@@ -271,7 +281,7 @@ export function ProductsPage() {
 
   const columns = [
     { key: 'name', header: 'Product Name' },
-    { key: 'sku', header: 'SKU' },
+    { key: 'sku', header: 'Stock Keeping Unit' },
     {
       key: 'type',
       header: 'Category',
@@ -455,12 +465,12 @@ export function ProductsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                SKU *
+                Stock Keeping Unit *
               </label>
               <Input
                 value={formData.sku}
                 onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-                placeholder="Enter SKU"
+                placeholder="Enter Stock Keeping Unit"
                 error={formErrors.sku}
               />
             </div>
@@ -475,6 +485,28 @@ export function ProductsPage() {
                 error={formErrors.name}
               />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sale and inventory behavior</label>
+            <Select
+              options={[
+                { value: 'STOCK', label: 'For sale — track a limited stock quantity' },
+                { value: 'UNLIMITED', label: 'For sale — unlimited service (no inventory count)' },
+                { value: 'INTERNAL', label: 'Not for sale — inventory/maintenance use only' },
+              ]}
+              value={!formData.isForSale ? 'INTERNAL' : formData.isStockTracked ? 'STOCK' : 'UNLIMITED'}
+              onChange={(event) => {
+                const behavior = event.target.value
+                setFormData({
+                  ...formData,
+                  isForSale: behavior !== 'INTERNAL',
+                  isStockTracked: behavior === 'STOCK' || behavior === 'INTERNAL',
+                  reorderLevel: behavior === 'UNLIMITED' ? 0 : formData.reorderLevel,
+                })
+              }}
+            />
+            <p className="mt-1 text-xs text-gray-500">Use unlimited service for purified-water refills. It can always be sold and never becomes low stock.</p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -531,7 +563,7 @@ export function ProductsPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {formData.isStockTracked && <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Reorder Level
@@ -545,7 +577,7 @@ export function ProductsPage() {
                 placeholder="Enter quantity"
               />
             </div>
-          </div>
+          </div>}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="flex items-center gap-2 pt-6">
