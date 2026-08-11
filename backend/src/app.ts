@@ -40,13 +40,14 @@ export function createApp() {
   // Development logging
   // morgan is not included in dependencies; use built-in Express logging or add morgan to package.json
 
-  // Rate limiting (general)
-  app.use(rateLimiter())
-
-  // Health check
+  // Health checks must remain outside the general rate limiter because the
+  // hosting platform polls this endpoint frequently to determine availability.
   app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() })
   })
+
+  // Rate limiting (general)
+  app.use(rateLimiter())
 
   // API routes
   app.use('/api/v1/auth', authRoutes)
