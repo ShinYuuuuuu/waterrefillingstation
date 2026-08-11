@@ -140,7 +140,7 @@ describe('InventoryService', () => {
       expect(result.productId).toBe('svc-prod-1')
       expect(result.quantityOnHand).toBe(100)
       expect(result.reservedQuantity).toBe(5)
-      expect(result.availableQuantity).toBe(95)
+      expect(result.availableQuantity).toBe(100)
       expect(result.createdAt).toBeDefined()
     })
 
@@ -186,7 +186,7 @@ describe('InventoryService', () => {
 
       expect(updated.quantityOnHand).toBe(200)
       expect(updated.reservedQuantity).toBe(10)
-      expect(updated.availableQuantity).toBe(190)
+      expect(updated.availableQuantity).toBe(200)
     })
 
     it('should create an audit log with before and after', async () => {
@@ -261,7 +261,7 @@ describe('InventoryService', () => {
       expect(alerts[0].reorderLevel).toBe(10)
     })
 
-    it('should factor in reserved quantity', async () => {
+    it('should not treat circulating stock as low shop stock', async () => {
       // 20 on hand, 15 reserved = 5 available, reorder_level=10 → low
       await inventoryService.createBranchInventory(
         { productId: 'svc-prod-1', quantityOnHand: 20, reservedQuantity: 15 },
@@ -269,8 +269,7 @@ describe('InventoryService', () => {
       )
 
       const alerts = await inventoryService.getLowStockAlerts(baseCtx)
-      expect(alerts).toHaveLength(1)
-      expect(alerts[0].availableQuantity).toBe(5)
+      expect(alerts).toHaveLength(0)
     })
 
     it('should return empty when all above reorder level', async () => {

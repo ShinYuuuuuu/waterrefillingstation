@@ -83,7 +83,7 @@ export class InventoryService {
       ctx,
     )
 
-     // Post-filter for lowStock: available_quantity (qoh - reserved) <= reorder_level
+     // Post-filter for lowStock: physical quantity at the shop <= reorder level.
      let filteredData = data
      if (query.lowStock) {
        filteredData = data.filter((item) => {
@@ -221,10 +221,9 @@ export class InventoryService {
   // =======================================================================
 
   /**
-   * Returns all branch inventory items where available_quantity <= reorder_level.
+   * Returns all branch inventory items where shop quantity <= reorder_level.
    *
-   * Business rule: triggers when available_quantity <= reorder_level.
-   * available_quantity = quantity_on_hand - reserved_quantity.
+   * Circulating stock does not reduce the shop's physical quantity.
    */
   async getLowStockAlerts(ctx: InventoryContext, branchId?: string): Promise<LowStockAlertResponse[]> {
     const alerts = await this.repository.findLowStockAlerts(ctx, branchId)

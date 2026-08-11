@@ -82,4 +82,12 @@ export const authService = {
       new_password: newPassword,
     })
   },
+
+  async updateProfile(data: { fullName: string; email: string }): Promise<{ id: string; fullName: string; email: string }> {
+    const response = await apiClient.put<{ success: boolean; data: { id: string; fullName: string; email: string } }>(
+      '/auth/me',
+      data,
+    )
+    return response.data.data
+  },
 }

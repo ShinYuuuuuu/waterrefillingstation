@@ -81,9 +81,7 @@ export class InventoryRepository {
       ]
     }
     if (query.lowStock) {
-      // Filter for: (quantity_on_hand - reserved_quantity) <= reorder_level
-      // Since available_quantity is a computed value, we filter in the service layer
-      // Here we just mark it so the service can post-filter
+      // Filter for physical shop quantity <= reorder level in the service layer.
     }
 
     const page = query.page ?? pagination.DEFAULT_PAGE

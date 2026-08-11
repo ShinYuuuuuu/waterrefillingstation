@@ -140,6 +140,34 @@ export const authController = {
     }
   },
 
+  async updateMe(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.userId || !req.tenantId) {
+        throw new AppError(401, 'Authentication required')
+      }
+
+      const { fullName, email } = req.validatedBody as { fullName: string; email: string }
+      const emailOwner = await prisma.user.findFirst({
+        where: { email, id: { not: req.userId }, deleted_at: null },
+      })
+      if (emailOwner) throw new AppError(409, 'Email address is already in use')
+
+      const updated = await prisma.user.update({
+        where: { id: req.userId },
+        data: { full_name: fullName, email, updated_at: new Date() },
+      })
+
+      logger.info('User updated profile', { userId: req.userId })
+      return res.status(200).json(successResponse({
+        id: updated.id,
+        fullName: updated.full_name,
+        email: updated.email,
+      }))
+    } catch (error) {
+      next(error)
+    }
+  },
+
   async listStaffAccounts(req: Request, res: Response, next: NextFunction) {
     try {
       if (!req.tenantId) throw new AppError(401, 'Authentication required')

@@ -787,7 +787,7 @@ describe('InventoryRepository', () => {
       expect(alerts[0].product_id).toBe('inv-prod-1')
     })
 
-    it('should consider reserved quantity in available calculation', async () => {
+    it('should use physical shop quantity instead of reserved quantity', async () => {
       // 20 on hand, 15 reserved = 5 available, reorder_level=10 → low stock
       await prisma.branchInventory.create({
         data: {
@@ -800,7 +800,7 @@ describe('InventoryRepository', () => {
       })
 
       const alerts = await inventoryRepository.findLowStockAlerts(baseCtx)
-      expect(alerts).toHaveLength(1)
+      expect(alerts).toHaveLength(0)
     })
 
     it('should return empty when all inventory is above reorder level', async () => {

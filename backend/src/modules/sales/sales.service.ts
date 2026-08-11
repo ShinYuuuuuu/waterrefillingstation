@@ -90,7 +90,10 @@ export class SaleService {
 
       // A refill costs the configured base price (₱20). Delivery adds ₱5 to
       // every gallon, rather than adding one delivery fee per transaction.
-      const isWaterRefill = (product as any).sku === 'WATER-5G-REFILL'
+      // Product names and SKUs are owner-editable, so identify refill entries
+      // by their stable SERVICE type instead of a hard-coded SKU.
+      const isWaterRefill = (product as any).type === 'SERVICE' ||
+        ((product as any).unit_of_measure?.toLowerCase() === 'gallon' && !(product as any).is_container)
       const unitPrice = Number((product as any).base_price) +
         (data.channel === 'DELIVERY' && isWaterRefill ? 5 : 0)
 

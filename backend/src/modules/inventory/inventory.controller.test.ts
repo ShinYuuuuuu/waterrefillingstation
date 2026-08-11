@@ -246,7 +246,7 @@ describe('InventoryController', () => {
       expect(res.status).toBe(200)
       expect(res.body.data.quantityOnHand).toBe(200)
       expect(res.body.data.reservedQuantity).toBe(10)
-      expect(res.body.data.availableQuantity).toBe(190)
+      expect(res.body.data.availableQuantity).toBe(200)
     })
 
     it('should return 404 for non-existent inventory', async () => {

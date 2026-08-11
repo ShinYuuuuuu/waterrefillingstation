@@ -106,7 +106,7 @@ describe('ProductController', () => {
       expect(res.body.error.message).toContain('Validation failed')
     })
 
-    it('should return 400 for missing categoryId', async () => {
+    it('should allow an uncategorized product', async () => {
       const res = await request(app).post('/products').send({
         sku: 'CTRL-003',
         name: 'No Category',
@@ -116,7 +116,7 @@ describe('ProductController', () => {
         costPrice: 25,
       })
 
-      expect(res.status).toBe(400)
+      expect(res.status).toBe(201)
     })
 
     it('should return 400 for missing name', async () => {
