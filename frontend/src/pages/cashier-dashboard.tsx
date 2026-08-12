@@ -13,14 +13,12 @@ import { Select } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
 import { useAuthContext } from '@/contexts/auth-context'
 import { salesService } from '@/services/sales.service'
-import { deliveryService } from '@/services/delivery.service'
 import { customerService } from '@/services/customer.service'
 import { productService } from '@/services/product.service'
 import { inventoryService } from '@/services/inventory.service'
 import type { Sale, CreateSaleRequest, SaleChannel } from '@/types/sales'
-import type { DeliveryOrder } from '@/types/delivery'
 import type { CustomerType } from '@/types/customer'
-import { FiShoppingCart, FiTruck, FiAlertTriangle, FiDollarSign, FiClipboard, FiSearch, FiGift } from 'react-icons/fi'
+import { FiShoppingCart, FiAlertTriangle, FiDollarSign, FiClipboard, FiSearch, FiGift } from 'react-icons/fi'
 
 const SALE_CHANNELS: { value: SaleChannel; label: string }[] = [
   { value: 'IN_STORE', label: 'Walk-in' },
@@ -81,12 +79,6 @@ export function CashierDashboard() {
   const { data: lowStockAlerts } = useQuery({
     queryKey: ['inventory', 'alerts', 'low-stock'],
     queryFn: () => inventoryService.getLowStockAlerts(),
-    enabled: isCashier,
-  })
-
-  const { data: pendingDeliveries } = useQuery({
-    queryKey: ['deliveries', 'pending'],
-    queryFn: () => deliveryService.list({ status: 'PENDING', limit: 10 }),
     enabled: isCashier,
   })
 
@@ -273,7 +265,6 @@ export function CashierDashboard() {
   // Daily figures reset by date range, not by deleting sales. Historical
   // records stay available to the owner and in the Sales page.
   const recentSales = (todaySales?.data ?? []).filter((sale) => sale.createdBy === user?.id)
-  const pendingDeliveriesList = pendingDeliveries?.data ?? []
 
   if (!isCashier) {
     return (
@@ -341,18 +332,6 @@ export function CashierDashboard() {
 
         <Card padding="none" className="cursor-pointer hover:border-primary-400 hover:shadow-md">
           <CardContent className="p-3 sm:p-4">
-            <div className="flex items-center justify-between" onClick={() => navigate('/deliveries?status=PENDING')} role="link" tabIndex={0}>
-              <div>
-                <p className="text-xs sm:text-sm leading-tight text-gray-500 dark:text-gray-400">Pending Deliveries</p>
-                <p className="mt-1 text-lg sm:text-2xl font-bold leading-tight text-gray-900 dark:text-white">{pendingDeliveriesList.length}</p>
-              </div>
-              <FiTruck className="hidden sm:block w-8 h-8 text-yellow-500" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card padding="none" className="cursor-pointer hover:border-primary-400 hover:shadow-md">
-          <CardContent className="p-3 sm:p-4">
             <div className="flex items-center justify-between" onClick={() => navigate('/inventory?filter=low')} role="link" tabIndex={0}>
               <div>
                 <p className="text-xs sm:text-sm leading-tight text-gray-500 dark:text-gray-400">Low Stock Items</p>
@@ -411,27 +390,6 @@ export function CashierDashboard() {
           </CardContent>
         </Card>
       </div>
-
-      {/* Pending Deliveries */}
-      {pendingDeliveriesList.length > 0 && (
-        <Card className="mt-6">
-          <CardContent className="p-4">
-            <h3 className="text-lg font-semibold mb-4">Pending Deliveries</h3>
-            <DataTable
-              columns={[
-                { key: 'id', header: 'Order ID', render: (item: DeliveryOrder) => item.id.slice(0, 8) },
-                { key: 'customerName', header: 'Customer', render: (item: DeliveryOrder) => item.customerName || 'N/A' },
-                { key: 'addressLine', header: 'Address', render: (item: DeliveryOrder) => item.addressLine || 'N/A' },
-                { key: 'assignedRiderName', header: 'Rider', render: (item: DeliveryOrder) => item.assignedRiderName || 'Unassigned' },
-                { key: 'status', header: 'Status', render: (item: DeliveryOrder) => <Badge variant="warning">{item.status}</Badge> },
-              ]}
-              data={pendingDeliveriesList}
-              rowKey="id"
-              emptyMessage="No pending deliveries"
-            />
-          </CardContent>
-        </Card>
-      )}
 
       {/* New Sale Modal */}
       <Modal open={isSaleOpen} onClose={() => { setIsSaleOpen(false); resetForm(); }} title="New Sale" size="lg">

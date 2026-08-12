@@ -10,7 +10,6 @@ import { ProductsPage } from '@/pages/products'
 import { MaintenancePage } from '@/pages/maintenance'
 import { InventoryPage } from '@/pages/inventory'
 import { SalesPage } from '@/pages/sales'
-import { DeliveriesPage } from '@/pages/deliveries'
 import { SettingsPage } from '@/pages/settings'
 import { ProfilePage } from '@/pages/profile'
 import { ManageAccountsPage } from '@/pages/manage-accounts'
@@ -92,16 +91,6 @@ export const AppRoutes = createBrowserRouter([
       <ProtectedRoute requiredRoles={['owner', 'cashier', 'super_admin']}>
         <DashboardLayout>
           <SalesPage />
-        </DashboardLayout>
-      </ProtectedRoute>
-    ),
-  },
-  {
-    path: '/deliveries',
-    element: (
-      <ProtectedRoute requiredRoles={['cashier']}>
-        <DashboardLayout>
-          <DeliveriesPage />
         </DashboardLayout>
       </ProtectedRoute>
     ),

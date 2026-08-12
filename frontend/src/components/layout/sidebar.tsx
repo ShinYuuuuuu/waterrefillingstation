@@ -8,7 +8,6 @@ import {
   FiUsers,
   FiPackage,
   FiShoppingCart,
-  FiTruck,
   FiMenu,
   FiX,
   FiChevronLeft,
@@ -63,12 +62,6 @@ const menuItems: MenuItem[] = [
     label: 'Maintenance',
     icon: FiTool,
     roles: ['owner', 'super_admin'],
-  },
-  {
-    href: '/deliveries',
-    label: 'Deliveries',
-    icon: FiTruck,
-    roles: ['cashier'],
   },
 ]
 
