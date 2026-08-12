@@ -15,6 +15,7 @@ import { productService } from '@/services/product.service'
 import { inventoryService } from '@/services/inventory.service'
 import type { Product, ProductType, CreateProductRequest, UpdateProductRequest } from '@/types/product'
 import { useToast } from '@/components/ui/toast'
+import { useAuthContext } from '@/contexts/auth-context'
 
 const PRODUCT_TYPES = [
   { value: 'FINISHED_GOOD', label: 'Stocked Product' },
@@ -30,6 +31,8 @@ const UNIT_OF_MEASURE_OPTIONS = [
 export function ProductsPage() {
   const queryClient = useQueryClient()
   const { addToast } = useToast()
+  const { user } = useAuthContext()
+  const canManageProducts = user?.role === 'owner' || user?.role === 'super_admin'
   const [searchQuery, setSearchQuery] = useState('')
   const [page, setPage] = useState(1)
   const [statusFilter, setStatusFilter] = useState<'active' | 'archived' | 'all'>('active')
@@ -87,6 +90,11 @@ export function ProductsPage() {
       }),
   })
 
+  const { data: inventoryData } = useQuery({
+    queryKey: ['inventory', 'product-stock'],
+    queryFn: () => inventoryService.listBranchInventory({ page: 1, limit: 100 }),
+  })
+
   const createMutation = useMutation({
     mutationFn: async (payload: CreateProductRequest) => {
       const product = await productService.create(payload)
@@ -102,6 +110,7 @@ export function ProductsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] })
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
       setIsFormOpen(false)
       resetForm()
       addToast({ type: 'success', title: 'Product created successfully' })
@@ -302,6 +311,9 @@ export function ProductsPage() {
   }
 
   const products = data?.data ?? []
+  const stockByProductId = new Map(
+    (inventoryData?.data ?? []).map((item) => [item.productId, item.quantityOnHand]),
+  )
   const isSubmitting = createMutation.isPending || updateMutation.isPending
   const isDeleting = deleteMutation.isPending || archiveMutation.isPending || reactivateMutation.isPending
 
@@ -319,6 +331,13 @@ export function ProductsPage() {
       key: 'basePrice',
       header: 'Selling Price',
       render: (item: Product) => `₱${Number(item.basePrice).toFixed(2)}`,
+    },
+    {
+      key: 'currentStock',
+      header: 'Current Stock',
+      render: (item: Product) => item.isStockTracked
+        ? String(stockByProductId.get(item.id) ?? 0)
+        : 'Unlimited',
     },
     {
       key: 'reorderLevel',
@@ -394,12 +413,14 @@ export function ProductsPage() {
         { label: 'Products' },
       ]}
     >
-      <div className="flex justify-end">
-        <Button onClick={openCreateForm}>
-          <FiPlus className="w-4 h-4 mr-2" />
-          Add Product
-        </Button>
-      </div>
+      {canManageProducts && (
+        <div className="flex justify-end">
+          <Button onClick={openCreateForm}>
+            <FiPlus className="w-4 h-4 mr-2" />
+            Add Product
+          </Button>
+        </div>
+      )}
 
       <div className="flex items-center gap-2 mt-4">
         <Select
@@ -419,9 +440,9 @@ export function ProductsPage() {
             <p className="text-gray-500 dark:text-gray-400">
               {searchQuery ? 'No products match your search' : 'No products yet'}
             </p>
-            <Button variant="outline" className="mt-4" onClick={openCreateForm}>
+            {canManageProducts && <Button variant="outline" className="mt-4" onClick={openCreateForm}>
               Add your first product
-            </Button>
+            </Button>}
           </CardContent>
         </Card>
       ) : (
@@ -435,7 +456,7 @@ export function ProductsPage() {
           searchPlaceholder="Search products..."
           emptyMessage="No products found"
           rowKey="id"
-          onRowClick={openEditForm}
+          onRowClick={canManageProducts ? openEditForm : undefined}
         />
       )}
 
@@ -479,9 +500,9 @@ export function ProductsPage() {
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sale and inventory behavior</label>
             <Select
               options={[
-                { value: 'STOCK', label: 'For sale — track a limited stock quantity' },
-                { value: 'UNLIMITED', label: 'For sale — unlimited service (no inventory count)' },
-                { value: 'INTERNAL', label: 'Not for sale — inventory/maintenance use only' },
+                { value: 'STOCK', label: 'For sale — inventory-tracked product' },
+                { value: 'UNLIMITED', label: 'For sale — service (not inventory-tracked)' },
+                { value: 'INTERNAL', label: 'Not for sale — internal inventory item' },
               ]}
               value={!formData.isForSale ? 'INTERNAL' : formData.isStockTracked ? 'STOCK' : 'UNLIMITED'}
               onChange={(event) => {
@@ -494,7 +515,7 @@ export function ProductsPage() {
                 })
               }}
             />
-            <p className="mt-1 text-xs text-gray-500">Use unlimited service for purified-water refills. It can always be sold and never becomes low stock.</p>
+            <p className="mt-1 text-xs text-gray-500">Inventory-tracked products and internal inventory items appear in Inventory. Services have no stock count.</p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -353,7 +353,7 @@ export function InventoryPage() {
     )},
     { key: 'inCirculation', header: 'In Circulation' },
     { key: 'soldQuantity', header: 'Sold' },
-    { key: 'currentBaseCount', header: 'Current Base' },
+    { key: 'currentBaseCount', header: 'Currently Owned' },
     { key: 'reorderLevel', header: 'Order Reminder At' },
     {
       key: 'status',

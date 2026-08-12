@@ -43,7 +43,7 @@ const menuItems: MenuItem[] = [
     href: '/products',
     label: 'Products',
     icon: FiPackage,
-    roles: ['owner', 'super_admin'],
+    roles: ['owner', 'cashier', 'super_admin'],
   },
   {
     href: '/inventory',
