@@ -99,7 +99,7 @@ export const AppRoutes = createBrowserRouter([
   {
     path: '/deliveries',
     element: (
-      <ProtectedRoute requiredRoles={['owner', 'cashier', 'super_admin']}>
+      <ProtectedRoute requiredRoles={['cashier']}>
         <DashboardLayout>
           <DeliveriesPage />
         </DashboardLayout>
