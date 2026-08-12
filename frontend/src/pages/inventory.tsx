@@ -21,7 +21,7 @@ import type {
   StockCountSession,
   InventoryUpdateRequest,
 } from '@/types/inventory'
-import { FiFileText, FiCheckCircle, FiAlertTriangle, FiPlus, FiTrash2 } from 'react-icons/fi'
+import { FiFileText, FiCheckCircle, FiAlertTriangle, FiTrash2 } from 'react-icons/fi'
 
 export function InventoryPage() {
   const queryClient = useQueryClient()
@@ -36,7 +36,6 @@ export function InventoryPage() {
 
   const [isAdjustOpen, setIsAdjustOpen] = useState(false)
   const [isDeleteInventoryOpen, setIsDeleteInventoryOpen] = useState(false)
-  const [isAddInventoryOpen, setIsAddInventoryOpen] = useState(false)
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
   const [isStockCountOpen, setIsStockCountOpen] = useState(false)
   const [isNotifyOpen, setIsNotifyOpen] = useState(false)
@@ -48,19 +47,11 @@ export function InventoryPage() {
   const [adjustError, setAdjustError] = useState('')
   const [updateCountForm, setUpdateCountForm] = useState({ quantity: '', notes: '' })
   const [updateCountError, setUpdateCountError] = useState('')
-  const [addInventoryForm, setAddInventoryForm] = useState({ productId: '', quantityOnHand: '' })
-  const [addInventoryError, setAddInventoryError] = useState('')
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['inventory', 'branch', searchQuery, page, lowStockOnly],
     queryFn: () => inventoryService.listBranchInventory({ page, limit: 20, search: searchQuery || undefined, lowStock: lowStockOnly || undefined }),
   })
-  const { data: stockTrackedProducts } = useQuery({
-    queryKey: ['products', 'without-inventory'],
-    queryFn: () => productService.list({ page: 1, limit: 100, isActive: true, isStockTracked: true }),
-    enabled: isOwner,
-  })
-
   const { data: lowStockAlerts } = useQuery({
     queryKey: ['inventory', 'alerts', 'low-stock'],
     queryFn: () => inventoryService.getLowStockAlerts(),
@@ -137,39 +128,6 @@ export function InventoryPage() {
       addToast({ type: 'error', title: err?.response?.data?.error?.message || 'Failed to remove inventory item' })
     },
   })
-
-  const addInventoryMutation = useMutation({
-    mutationFn: async () => {
-      return inventoryService.createBranchInventory({
-        productId: addInventoryForm.productId,
-        quantityOnHand: Number(addInventoryForm.quantityOnHand),
-      })
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['inventory'] })
-      setIsAddInventoryOpen(false)
-      setAddInventoryForm({ productId: '', quantityOnHand: '' })
-      setAddInventoryError('')
-      addToast({ type: 'success', title: 'Inventory added successfully' })
-    },
-    onError: (err: any) => {
-      addToast({ type: 'error', title: err?.response?.data?.error?.message || 'Failed to add inventory' })
-    },
-  })
-
-  const handleAddInventory = () => {
-    const quantity = Number(addInventoryForm.quantityOnHand)
-    if (!addInventoryForm.productId) {
-      setAddInventoryError('Select a product')
-      return
-    }
-    if (!Number.isInteger(quantity) || quantity < 0) {
-      setAddInventoryError('Opening quantity must be a valid whole number')
-      return
-    }
-    setAddInventoryError('')
-    addInventoryMutation.mutate()
-  }
 
   const notifyMutation = useMutation({
     mutationFn: () => Promise.resolve({ success: true }),
@@ -372,8 +330,6 @@ export function InventoryPage() {
   ], [])
 
   const items = data?.data ?? []
-  const inventoryProductIds = new Set(items.map((item) => item.productId))
-  const productsWithoutInventory = (stockTrackedProducts?.data ?? []).filter((product) => product.isStockTracked && !inventoryProductIds.has(product.id))
   const pagination = data?.meta
     ? {
         page: data.meta.page,
@@ -437,12 +393,6 @@ export function InventoryPage() {
             onChange={(e) => { setLowStockOnly(e.target.value === 'low'); setPage(1); }}
             className="w-40"
           />
-          {isOwner && (
-            <Button onClick={() => setIsAddInventoryOpen(true)}>
-              <FiPlus className="w-4 h-4 mr-2" />
-              Add Inventory
-            </Button>
-          )}
           {isOwner && (
             <Button onClick={() => setIsStockCountOpen(true)}>
               <FiCheckCircle className="w-4 h-4 mr-2" />
@@ -529,36 +479,6 @@ export function InventoryPage() {
           </CardContent>
         </Card>
       )}
-
-      <Modal open={isAddInventoryOpen} onClose={() => setIsAddInventoryOpen(false)} title="Add Inventory" size="md">
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Existing product or inventory supply</label>
-            <Select
-              value={addInventoryForm.productId}
-              onChange={(event) => { setAddInventoryForm({ ...addInventoryForm, productId: event.target.value }); setAddInventoryError('') }}
-              options={productsWithoutInventory.map((product) => ({ value: product.id, label: `${product.name} — ${product.sku}` }))}
-              placeholder="Select an item without inventory"
-              error={addInventoryError}
-            />
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Create new items in Products & Services first. This prevents duplicate product records.</p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Opening quantity</label>
-            <Input
-              type="number"
-              min="0"
-              step="1"
-              value={addInventoryForm.quantityOnHand}
-              onChange={(event) => setAddInventoryForm({ ...addInventoryForm, quantityOnHand: event.target.value })}
-            />
-          </div>
-          <div className="flex justify-end gap-3">
-            <Button variant="secondary" onClick={() => setIsAddInventoryOpen(false)}>Cancel</Button>
-            <Button onClick={handleAddInventory} loading={addInventoryMutation.isPending}>Add Inventory</Button>
-          </div>
-        </div>
-      </Modal>
 
       {/* Edit Inventory Modal */}
       <Modal open={isAdjustOpen} onClose={() => { setIsAdjustOpen(false); setSelectedItem(null); }} title="Edit Inventory Item" size="md">

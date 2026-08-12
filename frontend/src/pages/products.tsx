@@ -417,7 +417,7 @@ export function ProductsPage() {
         <div className="flex justify-end">
           <Button onClick={openCreateForm}>
             <FiPlus className="w-4 h-4 mr-2" />
-            Add Product
+            Add Product / Inventory
           </Button>
         </div>
       )}
@@ -441,7 +441,7 @@ export function ProductsPage() {
               {searchQuery ? 'No products match your search' : 'No products yet'}
             </p>
             {canManageProducts && <Button variant="outline" className="mt-4" onClick={openCreateForm}>
-              Add your first product
+              Add Product / Inventory
             </Button>}
           </CardContent>
         </Card>
