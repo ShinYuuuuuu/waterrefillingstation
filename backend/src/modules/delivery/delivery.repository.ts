@@ -188,6 +188,8 @@ export class DeliveryRepository {
         requested_time_slot: data.requestedTimeSlot ?? null,
         payment_method: data.paymentMethod ?? null,
         payment_status: data.paymentStatus ?? 'PENDING',
+        status: data.salesTransactionId ? 'DELIVERED' : 'PENDING',
+        delivered_at: data.salesTransactionId ? new Date() : null,
         sales_transaction_id: data.salesTransactionId ?? null,
         special_instructions: data.specialInstructions ?? null,
         items: {

@@ -11,16 +11,6 @@ import { MaintenancePage } from '@/pages/maintenance'
 import { InventoryPage } from '@/pages/inventory'
 import { SalesPage } from '@/pages/sales'
 import { DeliveriesPage } from '@/pages/deliveries'
-import { RiderDeliveriesPage } from '@/pages/rider-deliveries'
-import { useAuthContext } from '@/contexts/auth-context'
-
-function DeliveriesRouter() {
-  const { user } = useAuthContext()
-  if (user?.role === 'rider') {
-    return <RiderDeliveriesPage />
-  }
-  return <DeliveriesPage />
-}
 import { SettingsPage } from '@/pages/settings'
 import { ProfilePage } from '@/pages/profile'
 import { ManageAccountsPage } from '@/pages/manage-accounts'
@@ -51,7 +41,7 @@ export const AppRoutes = createBrowserRouter([
   {
     path: '/dashboard',
     element: (
-      <ProtectedRoute requiredRoles={['owner', 'cashier', 'rider', 'super_admin']}>
+      <ProtectedRoute requiredRoles={['owner', 'cashier', 'super_admin']}>
         <DashboardLayout>
           <DashboardRouter />
         </DashboardLayout>
@@ -109,9 +99,9 @@ export const AppRoutes = createBrowserRouter([
   {
     path: '/deliveries',
     element: (
-      <ProtectedRoute requiredRoles={['cashier', 'rider']}>
+      <ProtectedRoute requiredRoles={['owner', 'cashier', 'super_admin']}>
         <DashboardLayout>
-          <DeliveriesRouter />
+          <DeliveriesPage />
         </DashboardLayout>
       </ProtectedRoute>
     ),
@@ -129,7 +119,7 @@ export const AppRoutes = createBrowserRouter([
   {
     path: '/profile',
     element: (
-      <ProtectedRoute requiredRoles={['owner', 'cashier', 'rider', 'super_admin']}>
+      <ProtectedRoute requiredRoles={['owner', 'cashier', 'super_admin']}>
         <DashboardLayout>
           <ProfilePage />
         </DashboardLayout>

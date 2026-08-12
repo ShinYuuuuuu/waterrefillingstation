@@ -68,7 +68,7 @@ const menuItems: MenuItem[] = [
     href: '/deliveries',
     label: 'Deliveries',
     icon: FiTruck,
-    roles: ['cashier', 'rider'],
+    roles: ['owner', 'cashier', 'super_admin'],
   },
 ]
 

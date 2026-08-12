@@ -467,7 +467,7 @@ export function DeliveriesPage() {
           )
         },
       },
-    ],
+    ].filter((column) => column.key !== 'actions'),
     [isOwner, isCashier, isRider, canUpdateStatus, validStatusesForOrder]
   )
 

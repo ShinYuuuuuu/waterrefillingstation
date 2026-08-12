@@ -62,19 +62,6 @@ export class DeliveryService {
 
     const order = await this.repository.create(data, ctx)
 
-    // Auto-assign rider if not provided
-    let riderId = data.riderId
-    if (!riderId) {
-      const riders = await this.getRiders(ctx)
-      if (riders.length === 1) {
-        riderId = riders[0].id
-      }
-    }
-
-    if (riderId) {
-      await this.assignRider(order.id, { riderId }, ctx)
-    }
-
     await this.logAudit({
       tenantId: ctx.tenantId,
       userId: ctx.userId,

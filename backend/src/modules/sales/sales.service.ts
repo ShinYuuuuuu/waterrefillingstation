@@ -240,8 +240,8 @@ export class SaleService {
       }
     }
 
-    // Create the rider order on the server so every cashier entry point sends
-    // delivery sales to the rider queue.
+    // Delivery sales are recorded as completed delivery records immediately;
+    // this installation has no separate rider approval workflow.
     if (data.channel === 'DELIVERY' && data.customerId) {
       await deliveryService.createDeliveryOrder({
         customerId: data.customerId,

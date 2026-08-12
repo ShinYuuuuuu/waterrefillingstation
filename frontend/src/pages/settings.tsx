@@ -94,7 +94,7 @@ export function StaffAccountsPanel() {
         <CardTitle className="flex items-center gap-2">
           <FiUsers className="w-5 h-5" /> Staff Login Accounts
         </CardTitle>
-        <CardDescription>Manage the names, login emails, and passwords used by your cashier and rider.</CardDescription>
+        <CardDescription>Manage the name, login email, and password used by your cashier.</CardDescription>
       </CardHeader>
       <CardContent>
         {staffAccounts.isLoading ? (
@@ -103,7 +103,7 @@ export function StaffAccountsPanel() {
           <div className="rounded-lg bg-red-50 dark:bg-red-900/20 p-4 text-sm text-red-700 dark:text-red-300">Staff accounts could not be loaded. Please refresh the page.</div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {staffAccounts.data?.map((account) => <StaffAccountForm key={account.id} account={account} />)}
+            {staffAccounts.data?.filter((account) => account.role === 'CASHIER').map((account) => <StaffAccountForm key={account.id} account={account} />)}
           </div>
         )}
       </CardContent>
