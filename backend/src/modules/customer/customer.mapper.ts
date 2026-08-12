@@ -1,4 +1,5 @@
 import { Customer, CustomerResponse, CreateCustomerRequest, UpdateCustomerRequest, CustomerContext } from './customer.types'
+import { randomUUID } from 'crypto'
 
 /**
  * Maps between the database entity (snake_case, Prisma output) and the
@@ -48,7 +49,7 @@ export class CustomerMapper {
       customer_type: data.customerType ?? 'RETAIL',
       full_name: data.fullName,
       company_name: data.companyName ?? null,
-      phone: data.phone,
+      phone: data.phone?.trim() || `MESSENGER-${randomUUID()}`,
       email: data.email ?? null,
       tin: data.tin ?? null,
       credit_limit: data.creditLimit ?? 0,

@@ -1613,6 +1613,7 @@ model MaintenanceSchedule {
   trigger_type      String
   gallon_interval   Int?
   day_interval      Int?
+  next_due_at       DateTime?               @db.Timestamp(6)
   baseline_gallons  Int                     @default(0)
   last_completed_at DateTime?               @db.Timestamp(6)
   notes             String?

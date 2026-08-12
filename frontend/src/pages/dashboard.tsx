@@ -8,10 +8,10 @@ import { SkeletonCard, SkeletonTable } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Select } from '@/components/ui/select'
 import { customerService } from '@/services/customer.service'
-import { productService } from '@/services/product.service'
 import { salesService } from '@/services/sales.service'
 import { inventoryService } from '@/services/inventory.service'
-import { FiUsers, FiPackage, FiShoppingCart, FiAlertTriangle } from 'react-icons/fi'
+import { maintenanceService } from '@/services/maintenance.service'
+import { FiUsers, FiTool, FiShoppingCart, FiAlertTriangle } from 'react-icons/fi'
 
 const currency = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' })
 const compactCurrency = new Intl.NumberFormat('en-PH', {
@@ -60,17 +60,28 @@ export function DashboardPage() {
   const [salesPeriod, setSalesPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily')
   const today = new Date().toISOString().slice(0, 10)
   const customers = useQuery({ queryKey: ['dashboard', 'customers'], queryFn: () => customerService.list({ page: 1, limit: 1 }) })
-  const products = useQuery({ queryKey: ['dashboard', 'products'], queryFn: () => productService.list({ page: 1, limit: 1, isActive: true }) })
+  const maintenance = useQuery({ queryKey: ['dashboard', 'maintenance'], queryFn: maintenanceService.list })
   const summary = useQuery({ queryKey: ['dashboard', 'sales', today], queryFn: () => salesService.dailySummary(today) })
   const recentSales = useQuery({ queryKey: ['dashboard', 'recent-sales'], queryFn: () => salesService.list({ page: 1, limit: 5 }) })
   const lowStock = useQuery({ queryKey: ['dashboard', 'low-stock'], queryFn: () => inventoryService.getLowStockAlerts() })
   const trends = useQuery({ queryKey: ['dashboard', 'income-trends'], queryFn: salesService.incomeTrends })
-  const isLoading = customers.isLoading || products.isLoading || summary.isLoading || recentSales.isLoading || lowStock.isLoading || trends.isLoading
+  const isLoading = customers.isLoading || maintenance.isLoading || summary.isLoading || recentSales.isLoading || lowStock.isLoading || trends.isLoading
+
+  const maintenanceAttention = (maintenance.data?.schedules ?? []).filter((item) => {
+    if (item.due) return true
+    if (item.triggerType === 'DAYS' && item.nextDueAt) {
+      const millisecondsRemaining = new Date(item.nextDueAt).getTime() - Date.now()
+      return millisecondsRemaining >= 0 && millisecondsRemaining <= 2 * 86400000
+    }
+    return item.gallonInterval !== null
+      && item.gallonsRemaining !== null
+      && item.gallonsRemaining <= Math.max(1, Math.ceil(item.gallonInterval * 0.2))
+  })
 
   const stats = [
     { title: "Today's Sales", href: '/sales', value: currency.format(summary.data?.totalSales ?? 0), description: `${summary.data?.totalTransactions ?? 0} transactions`, trend: 'neutral' as const, trendValue: '', icon: <FiShoppingCart className="w-6 h-6" /> },
     { title: 'Customers', href: '/customers', value: String(customers.data?.meta.total ?? 0), description: 'Registered customers', trend: 'neutral' as const, trendValue: '', icon: <FiUsers className="w-6 h-6" /> },
-    { title: 'Products & Services', href: '/products', value: String(products.data?.meta.total ?? 0), description: 'Active catalog entries', trend: 'neutral' as const, trendValue: '', icon: <FiPackage className="w-6 h-6" /> },
+    { title: 'Maintenance', href: '/maintenance', value: String(maintenanceAttention.length), description: maintenanceAttention.length ? 'Tasks due or approaching' : 'No tasks need attention', trend: (maintenanceAttention.length ? 'down' : 'neutral') as 'down' | 'neutral', trendValue: '', icon: <FiTool className="w-6 h-6" /> },
     { title: 'Inventory', href: '/inventory', value: String(lowStock.data?.length ?? 0), description: 'Items needing attention', trend: (lowStock.data?.length ? 'down' : 'neutral') as 'down' | 'neutral', trendValue: '', icon: <FiAlertTriangle className="w-6 h-6" /> },
   ]
   const chartOptions = {

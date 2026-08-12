@@ -345,7 +345,6 @@ export function DeliveriesPage() {
         render: (item: DeliveryOrder) => (
           <div>
             <p className="text-sm font-medium text-gray-900 dark:text-white">{item.customerName || 'N/A'}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">{item.customerPhone || ''}</p>
           </div>
         ),
       },
@@ -575,12 +574,6 @@ export function DeliveriesPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Phone</label>
-              <Input
-                value={createForm.customerPhone}
-                onChange={(e) => setCreateForm({ ...createForm, customerPhone: e.target.value })}
-                placeholder="Phone number"
-              />
             </div>
           </div>
           <div>
@@ -698,11 +691,6 @@ export function DeliveriesPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Phone</label>
-                <Input
-                  value={editForm.customerPhone}
-                  onChange={(e) => setEditForm({ ...editForm, customerPhone: e.target.value })}
-                />
               </div>
             </div>
             <div>

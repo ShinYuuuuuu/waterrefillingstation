@@ -54,7 +54,7 @@ export class CustomerService {
     }
 
     // --- Duplicate phone / email / name check within tenant ---
-    const existing = await this.repository.findDuplicate(data.phone, data.email ?? null, data.fullName, ctx)
+    const existing = await this.repository.findDuplicate(data.phone ?? '', data.email ?? null, data.fullName, ctx)
     if (existing) {
       throw new AppError(httpStatus.CONFLICT, 'A customer with this phone number, email, or name already exists')
     }

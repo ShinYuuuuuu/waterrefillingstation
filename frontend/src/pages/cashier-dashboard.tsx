@@ -48,7 +48,6 @@ export function CashierDashboard() {
   const [customerSearch, setCustomerSearch] = useState('')
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
   const [customerName, setCustomerName] = useState('')
-  const [customerPhone, setCustomerPhone] = useState('')
   const [customerAddress, setCustomerAddress] = useState('')
   const [newCustomerType, setNewCustomerType] = useState<CustomerType>('RETAIL')
   const [quantity, setQuantity] = useState('')
@@ -126,7 +125,6 @@ export function CashierDashboard() {
     if (!exactMatch) return
 
     setSelectedCustomerId(exactMatch.id)
-    setCustomerPhone(exactMatch.phone)
     setCustomerAddress(typeof exactMatch.metadata?.address === 'string' ? exactMatch.metadata.address : '')
     setCustomerReward({
       balance: exactMatch.freeGallonsBalance,
@@ -186,7 +184,6 @@ export function CashierDashboard() {
     setCustomerSearch('')
     setSelectedCustomerId(null)
     setCustomerName('')
-    setCustomerPhone('')
     setCustomerAddress('')
     setNewCustomerType('RETAIL')
     setQuantity('')
@@ -222,10 +219,6 @@ export function CashierDashboard() {
     const trimmedName = customerName.trim()
 
     if (trimmedName && !customerId) {
-      if (!customerPhone.trim()) {
-        setSaleError('Phone number is required when adding a new customer')
-        return
-      }
       // Search for existing customer by exact case-insensitive name match
       const searchResult = await customerService.list({ search: trimmedName, limit: 10 })
       const exactMatch = searchResult.data.find((c) => c.fullName.toLowerCase() === trimmedName.toLowerCase())
@@ -238,7 +231,6 @@ export function CashierDashboard() {
         try {
           const newCustomer = await customerService.create({
             fullName: trimmedName,
-            phone: customerPhone.trim(),
             customerType: newCustomerType,
             metadata: customerAddress.trim() ? { address: customerAddress.trim() } : undefined,
           })
@@ -504,14 +496,12 @@ export function CashierDashboard() {
                   setSelectedCustomerId(customer.id)
                   setCustomerName(customer.fullName)
                   setCustomerSearch('')
-                  setCustomerPhone(customer.phone)
                   setCustomerAddress(typeof customer.metadata?.address === 'string' ? customer.metadata.address : '')
                   setCustomerReward({ balance: customer.freeGallonsBalance, type: customer.customerType, progress: customer.rewardGallonProgress })
                   setRedeemFreeGallons('0')
                     }}
                   >
                     <p className="text-sm font-medium text-gray-900 dark:text-white">{customer.fullName}</p>
-                    <p className="text-xs text-gray-500">{customer.phone}</p>
                   </div>
                 ))}
               </div>
@@ -605,15 +595,7 @@ export function CashierDashboard() {
           {(saleType === 'DELIVERY' || (customerName.trim() && !selectedCustomerId)) && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Phone *</label>
-                <Input
-                  value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
-                  placeholder="Phone number"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Address</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Place / Address (optional)</label>
                 <Input
                   value={customerAddress}
                   onChange={(e) => setCustomerAddress(e.target.value)}

@@ -18,6 +18,7 @@ import type { UserRole } from '@/types'
 import { APP_LOGO_URL, APP_SHORT_NAME } from '@/constants'
 import { salesService } from '@/services/sales.service'
 import { inventoryService } from '@/services/inventory.service'
+import { maintenanceService } from '@/services/maintenance.service'
 
 interface MenuItem {
   href: string
@@ -102,15 +103,28 @@ export function Sidebar() {
     enabled: user?.role === 'owner',
     refetchInterval: 30000,
   })
+  const maintenance = useQuery({
+    queryKey: ['sidebar', 'maintenance'],
+    queryFn: maintenanceService.list,
+    enabled: user?.role === 'owner',
+    refetchInterval: 60000,
+  })
 
   const latestSaleAt = latestSale.data?.data[0]?.createdAt
   const hasUnseenSale = Boolean(latestSaleAt && new Date(latestSaleAt) > new Date(seenAt.sales ?? 0))
   const hasInventoryAttention = Boolean((lowStock.data?.length ?? 0) > 0 || (pendingInventory.data?.meta.total ?? 0) > 0)
+  const hasMaintenanceAttention = Boolean(maintenance.data?.schedules.some((item) => {
+    if (item.due) return true
+    if (item.triggerType !== 'DAYS' || !item.nextDueAt) return false
+    const millisecondsRemaining = new Date(item.nextDueAt).getTime() - Date.now()
+    return millisecondsRemaining >= 0 && millisecondsRemaining <= 2 * 86400000
+  }))
 
   const hasIndicator = (href: string) => {
     if (user?.role !== 'owner') return false
     if (href === '/sales') return hasUnseenSale
     if (href === '/inventory') return hasInventoryAttention
+    if (href === '/maintenance') return hasMaintenanceAttention
     return false
   }
 

@@ -19,7 +19,7 @@ export const createCustomerSchema = z.object({
   customerType: customerTypeSchema.default('RETAIL'),
   fullName: z.string().min(1, 'Full name is required').max(255),
   companyName: z.string().max(255).optional().nullable(),
-  phone: z.string().min(1, 'Phone number is required').max(30),
+  phone: z.string().max(30).optional(),
   email: z.string().email('Invalid email format').optional().nullable(),
   tin: z.string().max(50).optional().nullable(),
   creditLimit: decimalField.optional(),

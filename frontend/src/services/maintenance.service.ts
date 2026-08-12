@@ -29,7 +29,7 @@ export const maintenanceService = {
     const response = await apiClient.get('/maintenance')
     return response.data.data
   },
-  async create(data: { name: string; triggerType: 'GALLONS' | 'DAYS'; gallonInterval?: number; dayInterval?: number; notes?: string }): Promise<MaintenanceSchedule> {
+  async create(data: { name: string; triggerType: 'GALLONS' | 'DAYS'; gallonInterval?: number; dayInterval?: number; nextDueAt?: string; notes?: string }): Promise<MaintenanceSchedule> {
     const response = await apiClient.post('/maintenance', data)
     return response.data.data
   },

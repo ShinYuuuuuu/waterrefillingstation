@@ -10,10 +10,12 @@ const createSchema = z.object({
   triggerType: z.enum(['GALLONS', 'DAYS']),
   gallonInterval: z.number().int().positive().optional(),
   dayInterval: z.number().int().positive().optional(),
+  nextDueAt: z.coerce.date().optional(),
   notes: z.string().max(1000).optional().nullable(),
 }).superRefine((value, ctx) => {
   if (value.triggerType === 'GALLONS' && !value.gallonInterval) ctx.addIssue({ code: 'custom', message: 'Gallon interval is required', path: ['gallonInterval'] })
   if (value.triggerType === 'DAYS' && !value.dayInterval) ctx.addIssue({ code: 'custom', message: 'Day interval is required', path: ['dayInterval'] })
+  if (value.triggerType === 'DAYS' && !value.nextDueAt) ctx.addIssue({ code: 'custom', message: 'Next maintenance date is required', path: ['nextDueAt'] })
 })
 
 async function getContext(req: Request) {
@@ -28,7 +30,7 @@ async function totalGallons(tenantId: string, branchId: string) {
     _sum: { quantity: true },
     where: {
       deleted_at: null,
-      product: { unit_of_measure: { equals: 'gallon', mode: 'insensitive' }, is_container: false },
+      product: { unit_of_measure: { equals: 'gallon', mode: 'insensitive' } },
       sales_transaction: { tenant_id: tenantId, branch_id: branchId, status: 'COMPLETED', deleted_at: null },
     },
   })
@@ -37,8 +39,7 @@ async function totalGallons(tenantId: string, branchId: string) {
 
 function mapSchedule(schedule: any, gallonsSold: number) {
   const gallonsSince = Math.max(0, gallonsSold - schedule.baseline_gallons)
-  const baseDate = schedule.last_completed_at ?? schedule.created_at
-  const nextDueAt = schedule.day_interval ? new Date(baseDate.getTime() + schedule.day_interval * 86400000) : null
+  const nextDueAt = schedule.next_due_at ?? null
   const due = schedule.trigger_type === 'GALLONS'
     ? gallonsSince >= (schedule.gallon_interval ?? Number.MAX_SAFE_INTEGER)
     : Boolean(nextDueAt && nextDueAt <= new Date())
@@ -106,6 +107,7 @@ maintenanceRoutes.post('/', async (req: Request, res: Response, next: NextFuncti
       tenant_id: ctx.tenantId, branch_id: ctx.branchId, created_by: ctx.userId,
       name: parsed.data.name, trigger_type: parsed.data.triggerType,
       gallon_interval: parsed.data.gallonInterval, day_interval: parsed.data.dayInterval,
+      next_due_at: parsed.data.triggerType === 'DAYS' ? parsed.data.nextDueAt : null,
       baseline_gallons: gallons, notes: parsed.data.notes,
     } })
     res.status(201).json(successResponse(mapSchedule(created, gallons)))
@@ -121,7 +123,10 @@ maintenanceRoutes.post('/:id/complete', async (req: Request, res: Response, next
     const now = new Date()
     const updated = await prisma.$transaction(async (tx: any) => {
       await tx.maintenanceCompletion.create({ data: { tenant_id: ctx.tenantId, schedule_id: schedule.id, performed_by: ctx.userId, performed_at: now, gallon_count_at_completion: gallons, notes: req.body?.notes ?? null } })
-      return tx.maintenanceSchedule.update({ where: { id: schedule.id }, data: { baseline_gallons: gallons, last_completed_at: now, updated_at: now } })
+      const nextDueAt = schedule.trigger_type === 'DAYS' && schedule.day_interval
+        ? new Date(now.getTime() + schedule.day_interval * 86400000)
+        : null
+      return tx.maintenanceSchedule.update({ where: { id: schedule.id }, data: { baseline_gallons: gallons, last_completed_at: now, next_due_at: nextDueAt, updated_at: now } })
     })
     res.json(successResponse(mapSchedule(updated, gallons)))
   } catch (error) { next(error) }

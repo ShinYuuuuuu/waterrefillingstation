@@ -37,12 +37,10 @@ export function CustomersPage() {
   const [formData, setFormData] = useState<{
     customerType: CustomerType
     fullName: string
-    phone: string
     address: string
   }>({
     customerType: 'RETAIL',
     fullName: '',
-    phone: '',
     address: '',
   })
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
@@ -142,7 +140,6 @@ export function CustomersPage() {
     setFormData({
       customerType: 'RETAIL',
       fullName: '',
-      phone: '',
       address: '',
     })
     setFormErrors({})
@@ -159,7 +156,6 @@ export function CustomersPage() {
     setFormData({
       customerType: customer.customerType,
       fullName: customer.fullName,
-      phone: customer.phone,
       address: typeof customer.metadata?.address === 'string' ? customer.metadata.address : '',
     })
     setFormErrors({})
@@ -169,7 +165,6 @@ export function CustomersPage() {
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {}
     if (!formData.fullName.trim()) errors.fullName = 'Full name is required'
-    if (!formData.phone.trim()) errors.phone = 'Phone number is required'
     setFormErrors(errors)
     return Object.keys(errors).length === 0
   }
@@ -179,7 +174,6 @@ export function CustomersPage() {
     const payload = {
       customerType: formData.customerType,
       fullName: formData.fullName,
-      phone: formData.phone,
       metadata: {
         ...(editingCustomer?.metadata ?? {}),
         address: formData.address.trim(),
@@ -227,7 +221,6 @@ export function CustomersPage() {
           >
             {item.fullName}
           </button>
-          <p className="text-xs text-gray-500 dark:text-gray-400">{item.phone}</p>
         </div>
       ),
     },
@@ -417,19 +410,7 @@ export function CustomersPage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Phone *
-            </label>
-            <Input
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              placeholder="Enter phone number"
-              error={formErrors.phone}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Address
+              Place / Address (optional)
             </label>
             <Input
               value={formData.address}

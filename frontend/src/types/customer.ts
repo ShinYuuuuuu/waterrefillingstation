@@ -16,7 +16,7 @@ export interface Customer {
   customerType: CustomerType
   fullName: string
   companyName: string | null
-  phone: string
+  phone?: string
   email: string | null
   tin: string | null
   creditLimit: number
@@ -84,7 +84,7 @@ export interface CreateCustomerRequest {
   customerType?: CustomerType
   fullName: string
   companyName?: string | null
-  phone: string
+  phone?: string
   email?: string | null
   tin?: string | null
   creditLimit?: number | string

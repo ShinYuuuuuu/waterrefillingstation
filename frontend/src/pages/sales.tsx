@@ -405,7 +405,6 @@ export function SalesPage() {
                         }}
                       >
                         <p className="font-medium text-gray-900 dark:text-white">{customer.fullName}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{customer.phone}</p>
                       </div>
                     ))}
                   </div>

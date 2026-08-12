@@ -9,7 +9,7 @@ import { useToast } from '@/components/ui/toast'
 import { useAuthContext } from '@/contexts/auth-context'
 import { deliveryService } from '@/services/delivery.service'
 import type { DeliveryOrder, DeliveryOrderStatus } from '@/types/delivery'
-import { FiTruck, FiMapPin, FiPhone, FiCheckCircle, FiXCircle, FiClock } from 'react-icons/fi'
+import { FiTruck, FiMapPin, FiCheckCircle, FiXCircle, FiClock } from 'react-icons/fi'
 
 type RiderTab = 'active' | 'completed' | 'failed'
 
@@ -209,12 +209,6 @@ export function RiderDeliveriesPage() {
                           <p className="text-xs text-gray-500 dark:text-gray-400">{order.addressLine || 'No address'}</p>
                         </div>
                       </div>
-                      {order.customerPhone && (
-                        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-                          <FiPhone className="w-4 h-4" />
-                          {order.customerPhone}
-                        </div>
-                      )}
                       <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-300">
                         <span>Qty: {order.items.reduce((sum, i) => sum + i.quantity, 0)} gallons</span>
                         <span>₱{order.items.reduce((sum, i) => sum + i.lineTotal, 0).toFixed(2)}</span>

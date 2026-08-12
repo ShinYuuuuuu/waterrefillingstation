@@ -178,15 +178,9 @@ export function SettingsPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Address
+                  Place / Address (optional)
                 </label>
                 <Input defaultValue="123 Main St, Manila" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Contact Number
-                </label>
-                <Input defaultValue="02-1234-5678" />
               </div>
             </div>
             <Button>
