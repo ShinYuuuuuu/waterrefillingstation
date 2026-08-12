@@ -75,6 +75,8 @@ export interface CreateSaleRequest {
   taxTotal?: number
   notes?: string | null
   redeemFreeGallons?: number
+  lentInventoryProductId?: string | null
+  lentInventoryQuantity?: number
 }
 
 export interface SaleListQuery {

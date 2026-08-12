@@ -42,6 +42,7 @@ import {
 import { InventoryMapper } from './inventory.mapper'
 import { InventoryRepository, inventoryRepository } from './inventory.repository'
 import { Product } from '../product/product.types'
+import { saleRepository } from '../sales/sales.repository'
 
 /**
  * Application service for the Inventory Management module.
@@ -93,8 +94,30 @@ export class InventoryService {
      }
 
      const resultTotal = query.lowStock ? filteredData.length : total
+     const productIds = filteredData.map((item) => item.product_id)
+     const [outstanding, sold] = await Promise.all([
+       prisma.inventoryLoan.groupBy({
+         by: ['branch_id', 'product_id'],
+         where: { tenant_id: ctx.tenantId, ...(ctx.branchId ? { branch_id: ctx.branchId } : {}), product_id: { in: productIds }, status: 'OUTSTANDING' },
+         _sum: { quantity: true },
+       }),
+       prisma.inventoryLoan.groupBy({
+         by: ['branch_id', 'product_id'],
+         where: { tenant_id: ctx.tenantId, ...(ctx.branchId ? { branch_id: ctx.branchId } : {}), product_id: { in: productIds }, status: 'SOLD' },
+         _sum: { quantity: true },
+       }),
+     ])
+     const key = (branchId: string, productId: string) => `${branchId}:${productId}`
+     const outstandingMap = new Map<string, number>(outstanding.map((row: any) => [key(row.branch_id, row.product_id), Number(row._sum.quantity ?? 0)]))
+     const soldMap = new Map<string, number>(sold.map((row: any) => [key(row.branch_id, row.product_id), Number(row._sum.quantity ?? 0)]))
      return {
-       data: filteredData.map((item) => InventoryMapper.toBranchInventoryResponse(item as BranchInventory & { product?: Product })),
+       data: filteredData.map((item) => ({
+         ...InventoryMapper.toBranchInventoryResponse(item as BranchInventory & { product?: Product }),
+         inCirculation: outstandingMap.get(key(item.branch_id, item.product_id)) ?? 0,
+         soldQuantity: soldMap.get(key(item.branch_id, item.product_id)) ?? 0,
+         currentBaseCount: item.quantity_on_hand + (outstandingMap.get(key(item.branch_id, item.product_id)) ?? 0),
+         originalCount: item.quantity_on_hand + (outstandingMap.get(key(item.branch_id, item.product_id)) ?? 0) + (soldMap.get(key(item.branch_id, item.product_id)) ?? 0),
+       })),
        meta: {
          page,
          limit,
@@ -102,6 +125,61 @@ export class InventoryService {
          totalPages: Math.ceil(resultTotal / limit),
        },
      }
+  }
+
+  async listInventoryLoans(ctx: InventoryContext) {
+    return prisma.inventoryLoan.findMany({
+      where: { tenant_id: ctx.tenantId, ...(ctx.branchId ? { branch_id: ctx.branchId } : {}) },
+      include: { customer: { select: { full_name: true } }, product: { select: { name: true, sku: true } } },
+      orderBy: { lent_at: 'desc' },
+    })
+  }
+
+  async resolveInventoryLoan(id: string, action: 'RETURN' | 'SOLD', ctx: InventoryContext, payment?: { amount: number; paymentMethod: 'CASH' | 'GCASH' | 'MAYA' | 'BANK_TRANSFER' }) {
+    const loan = await prisma.inventoryLoan.findFirst({
+      where: { id, tenant_id: ctx.tenantId, ...(ctx.branchId ? { branch_id: ctx.branchId } : {}), status: 'OUTSTANDING' },
+      include: { customer: true, product: true },
+    })
+    if (!loan) throw new NotFoundError('Outstanding inventory loan')
+    let paidSaleId: string | null = null
+    if (action === 'SOLD') {
+      if (!payment) throw new AppError(httpStatus.BAD_REQUEST, 'Payment details are required')
+      const unitPrice = payment.amount / loan.quantity
+      const sale = await saleRepository.create({
+        customerId: loan.customer_id,
+        channel: 'IN_STORE',
+        items: [{ productId: loan.product_id, productName: loan.product.name, quantity: loan.quantity, unitPrice }],
+        payments: [{ amount: payment.amount, method: payment.paymentMethod }],
+        notes: `Payment for lent inventory ${loan.id}`,
+      }, { tenantId: ctx.tenantId, branchId: loan.branch_id, userId: ctx.userId })
+      paidSaleId = sale.id
+    }
+    return prisma.$transaction(async (tx: any) => {
+      if (action === 'RETURN') {
+        await tx.branchInventory.update({
+          where: { branch_id_product_id: { branch_id: loan.branch_id, product_id: loan.product_id } },
+          data: { quantity_on_hand: { increment: loan.quantity }, updated_at: new Date() },
+        })
+      }
+      const updated = await tx.inventoryLoan.update({
+        where: { id: loan.id },
+        data: { status: action === 'RETURN' ? 'RETURNED' : 'SOLD', sale_id: paidSaleId ?? loan.sale_id, resolved_at: new Date(), updated_at: new Date() },
+      })
+      await tx.inventoryLedger.create({
+        data: {
+          tenant_id: loan.tenant_id,
+          branch_id: loan.branch_id,
+          product_id: loan.product_id,
+          movement_type: action === 'RETURN' ? 'RETURN' : 'SALE',
+          quantity_delta: action === 'RETURN' ? loan.quantity : 0,
+          reference_type: 'INVENTORY_LOAN',
+          reference_id: loan.id,
+          notes: action === 'RETURN' ? `Returned by ${loan.customer.full_name}` : `Paid and marked sold to ${loan.customer.full_name}`,
+          created_by: ctx.userId,
+        },
+      })
+      return updated
+    })
   }
 
   /**

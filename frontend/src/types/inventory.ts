@@ -13,6 +13,22 @@ export interface InventoryItem {
   lastCountedAt: string | null
   createdAt: string
   updatedAt: string
+  inCirculation: number
+  soldQuantity: number
+  currentBaseCount: number
+  originalCount: number
+}
+
+export interface InventoryLoan {
+  id: string
+  product_id: string
+  customer_id: string
+  quantity: number
+  status: 'OUTSTANDING' | 'RETURNED' | 'SOLD'
+  lent_at: string
+  resolved_at: string | null
+  customer: { full_name: string }
+  product: { name: string; sku: string }
 }
 
 export interface InventoryListResponse {

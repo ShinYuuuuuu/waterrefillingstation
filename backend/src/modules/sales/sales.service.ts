@@ -57,6 +57,12 @@ export class SaleService {
     if (!data.payments.length) {
       throw new AppError(httpStatus.BAD_REQUEST, 'At least one payment is required')
     }
+    if ((data.lentInventoryQuantity ?? 0) > 0 && !data.customerId) {
+      throw new AppError(httpStatus.BAD_REQUEST, 'Select a customer before lending inventory')
+    }
+    if ((data.lentInventoryQuantity ?? 0) > 0 && !data.lentInventoryProductId) {
+      throw new AppError(httpStatus.BAD_REQUEST, 'Select the inventory item being lent')
+    }
 
     let customer: any = null
     // Validate customer if provided
@@ -80,6 +86,23 @@ export class SaleService {
     }
 
     const productMap = new Map(products.map((p: any) => [p.id, p]))
+
+    let lentInventory: any = null
+    const lentQuantity = data.lentInventoryQuantity ?? 0
+    if (data.lentInventoryProductId && lentQuantity > 0) {
+      lentInventory = await prisma.branchInventory.findFirst({
+        where: {
+          tenant_id: ctx.tenantId,
+          branch_id: ctx.branchId ?? undefined,
+          product_id: data.lentInventoryProductId,
+          deleted_at: null,
+          product: { deleted_at: null, is_active: true, is_stock_tracked: true },
+        },
+      })
+      if (!lentInventory || lentInventory.quantity_on_hand < lentQuantity) {
+        throw new AppError(httpStatus.BAD_REQUEST, 'Not enough inventory at the shop to lend')
+      }
+    }
 
     const processedItems: CreateSaleRequest['items'] = []
     for (const item of data.items) {
@@ -159,6 +182,39 @@ export class SaleService {
     }
 
     const createdSale = await this.repository.create(createData, ctx)
+
+    if (data.lentInventoryProductId && (data.lentInventoryQuantity ?? 0) > 0 && customer) {
+      await prisma.$transaction([
+        prisma.branchInventory.update({
+          where: { id: lentInventory.id },
+          data: { quantity_on_hand: { decrement: lentQuantity }, updated_at: new Date() },
+        }),
+        prisma.inventoryLoan.create({
+          data: {
+            tenant_id: ctx.tenantId,
+            branch_id: lentInventory.branch_id,
+            product_id: data.lentInventoryProductId,
+            customer_id: customer.id,
+            sale_id: createdSale.id,
+            quantity: lentQuantity,
+            created_by: ctx.userId,
+          },
+        }),
+        prisma.inventoryLedger.create({
+          data: {
+            tenant_id: ctx.tenantId,
+            branch_id: lentInventory.branch_id,
+            product_id: data.lentInventoryProductId,
+            movement_type: 'TRANSFER_OUT',
+            quantity_delta: -lentQuantity,
+            reference_type: 'INVENTORY_LOAN',
+            reference_id: createdSale.id,
+            notes: `Lent to ${customer.full_name}`,
+            created_by: ctx.userId,
+          },
+        }),
+      ])
+    }
 
     if (customer) {
       const paidGallons = Math.max(0, gallonQuantity - redeemFreeGallons)
@@ -426,24 +482,28 @@ export class SaleService {
       select: { created_at: true, grand_total: true },
     })
 
-    const sumRange = (from: Date, to: Date) => sales.reduce((sum: number, sale: any) => {
-      return sale.created_at >= from && sale.created_at < to ? sum + Number(sale.grand_total) : sum
-    }, 0)
+    const summarizeRange = (from: Date, to: Date) => sales.reduce((summary: { total: number; transactions: number }, sale: any) => {
+      if (sale.created_at >= from && sale.created_at < to) {
+        summary.total += Number(sale.grand_total)
+        summary.transactions += 1
+      }
+      return summary
+    }, { total: 0, transactions: 0 })
 
     const daily = Array.from({ length: 7 }, (_, index) => {
       const from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (6 - index))
       const to = new Date(from); to.setDate(to.getDate() + 1)
-      return { label: from.toLocaleDateString('en-PH', { weekday: 'short' }), total: sumRange(from, to) }
+      return { label: from.toLocaleDateString('en-PH', { weekday: 'short' }), ...summarizeRange(from, to) }
     })
     const weekly = Array.from({ length: 8 }, (_, index) => {
       const to = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((7 - index) * 7) + 1)
       const from = new Date(to); from.setDate(from.getDate() - 7)
-      return { label: `${from.getMonth() + 1}/${from.getDate()}`, total: sumRange(from, to) }
+      return { label: `${from.getMonth() + 1}/${from.getDate()}`, ...summarizeRange(from, to) }
     })
     const monthly = Array.from({ length: 12 }, (_, index) => {
       const from = new Date(now.getFullYear(), now.getMonth() - (11 - index), 1)
       const to = new Date(from.getFullYear(), from.getMonth() + 1, 1)
-      return { label: from.toLocaleDateString('en-PH', { month: 'short' }), total: sumRange(from, to) }
+      return { label: from.toLocaleDateString('en-PH', { month: 'short', year: '2-digit' }), ...summarizeRange(from, to) }
     })
     return { daily, weekly, monthly }
   }

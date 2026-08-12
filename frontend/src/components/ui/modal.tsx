@@ -50,7 +50,7 @@ export function Modal({
       />
       <div
         className={cn(
-          'relative flex max-h-[92dvh] flex-col bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-xl shadow-xl w-full border border-gray-200 dark:border-gray-700',
+          'relative flex max-h-[92dvh] flex-col bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-t-2xl sm:rounded-xl shadow-xl w-full border border-gray-200 dark:border-gray-700',
           sizeClasses[size]
         )}
       >

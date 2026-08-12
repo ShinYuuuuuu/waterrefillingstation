@@ -27,6 +27,8 @@ import {
   inventoryUpdateRequestIdSchema,
   inventoryUpdateRequestListQuerySchema,
   reviewInventoryUpdateRequestSchema,
+  inventoryLoanIdSchema,
+  sellInventoryLoanSchema,
 } from './inventory.schema'
 
 /**
@@ -39,6 +41,10 @@ export const inventoryRoutes = Router()
 
 // Require a valid access token on every inventory route.
 inventoryRoutes.use(authenticateToken)
+
+inventoryRoutes.get('/loans', requirePermission(InventoryPermission.READ), inventoryController.listInventoryLoans)
+inventoryRoutes.post('/loans/:loanId/return', requirePermission(InventoryPermission.UPDATE), validateRequest(inventoryLoanIdSchema), inventoryController.returnInventoryLoan)
+inventoryRoutes.post('/loans/:loanId/sell', requirePermission(InventoryPermission.UPDATE), validateRequest(sellInventoryLoanSchema), inventoryController.sellInventoryLoan)
 
 // =========================================================================
 // BRANCH INVENTORY — CRUD

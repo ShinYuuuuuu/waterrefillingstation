@@ -50,6 +50,8 @@ export const createSaleSchema = z.object({
   taxTotal: decimalField.optional().default(0),
   notes: z.string().max(1000).optional().nullable(),
   redeemFreeGallons: z.number().int().nonnegative().optional().default(0),
+  lentInventoryProductId: z.string().uuid('Invalid lent inventory product ID').optional().nullable(),
+  lentInventoryQuantity: z.number().int().nonnegative().optional().default(0),
 })
 
 /**

@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { PageLayout } from '@/layouts/page-layout'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { DataTable } from '@/components/ui/data-table'
 import { SkeletonTable } from '@/components/ui/skeleton'
@@ -29,6 +29,8 @@ export function SalesPage() {
   const { addToast } = useToast()
   const { user } = useAuthContext()
   const canCreateSale = user?.role === 'cashier'
+  const isOwner = user?.role === 'owner'
+  const [reportPeriod, setReportPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily')
   const [searchQuery, setSearchQuery] = useState('')
   const [page, setPage] = useState(1)
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -66,6 +68,19 @@ export function SalesPage() {
         limit: 20,
       }),
   })
+
+  const { data: incomeTrends, isLoading: trendsLoading } = useQuery({
+    queryKey: ['sales', 'income-trends'],
+    queryFn: salesService.incomeTrends,
+    enabled: isOwner,
+  })
+
+  const reportData = incomeTrends?.[reportPeriod] ?? []
+  const reportSummary = useMemo(() => reportData.reduce((summary, point) => ({
+    revenue: summary.revenue + point.total,
+    transactions: summary.transactions + point.transactions,
+  }), { revenue: 0, transactions: 0 }), [reportData])
+  const reportMaximum = Math.max(...reportData.map((point) => point.total), 1)
 
   const createMutation = useMutation({
     mutationFn: (payload: CreateSaleRequest) => salesService.create(payload),
@@ -250,6 +265,52 @@ export function SalesPage() {
         { label: 'Sales' },
       ]}
     >
+      {isOwner && (
+        <div className="mb-6 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Sales Tracking</h2>
+              <p className="text-sm text-gray-500">Compare completed sales by day, week, or month.</p>
+            </div>
+            <Select
+              className="sm:w-44"
+              options={[
+                { value: 'daily', label: 'Daily — 7 days' },
+                { value: 'weekly', label: 'Weekly — 8 weeks' },
+                { value: 'monthly', label: 'Monthly — 12 months' },
+              ]}
+              value={reportPeriod}
+              onChange={(event) => setReportPeriod(event.target.value as 'daily' | 'weekly' | 'monthly')}
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Card><CardContent><p className="text-sm text-gray-500">Period Revenue</p><p className="mt-1 text-2xl font-bold">₱{reportSummary.revenue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p></CardContent></Card>
+            <Card><CardContent><p className="text-sm text-gray-500">Transactions</p><p className="mt-1 text-2xl font-bold">{reportSummary.transactions}</p></CardContent></Card>
+            <Card><CardContent><p className="text-sm text-gray-500">Average Sale</p><p className="mt-1 text-2xl font-bold">₱{(reportSummary.transactions ? reportSummary.revenue / reportSummary.transactions : 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p></CardContent></Card>
+          </div>
+          <Card>
+            <CardHeader><CardTitle>{reportPeriod.charAt(0).toUpperCase() + reportPeriod.slice(1)} Sales</CardTitle></CardHeader>
+            <CardContent>
+              {trendsLoading ? <div className="h-56 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" /> : (
+                <div className="overflow-x-auto pb-1">
+                  <div className={reportData.length > 8 ? 'min-w-[42rem]' : 'min-w-[28rem]'}>
+                    <div className="h-56 flex items-end gap-3 border-b border-gray-200 dark:border-gray-700 pt-8">
+                      {reportData.map((point) => (
+                        <div key={point.label} className="flex-1 h-full flex flex-col justify-end items-center min-w-0">
+                          <span className="text-[10px] font-semibold whitespace-nowrap text-gray-900 dark:text-white">₱{point.total.toLocaleString('en-PH')}</span>
+                          <span className="text-[10px] text-gray-500 dark:text-gray-200 mb-1">{point.transactions} sale{point.transactions === 1 ? '' : 's'}</span>
+                          <div className="w-full max-w-12 rounded-t bg-primary-500 min-h-[2px]" style={{ height: `${Math.max((point.total / reportMaximum) * 100, point.total > 0 ? 4 : 1)}%` }} title={`${point.label}: ₱${point.total.toFixed(2)} from ${point.transactions} transactions`} />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-3 mt-2">{reportData.map((point) => <span key={point.label} className="flex-1 min-w-0 text-center text-[10px] text-gray-500 truncate">{point.label}</span>)}</div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
       {sales.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">

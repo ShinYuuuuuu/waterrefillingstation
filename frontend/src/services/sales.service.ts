@@ -55,7 +55,7 @@ export const salesService = {
     return response.data.data
   },
 
-  async incomeTrends(): Promise<{ daily: { label: string; total: number }[]; weekly: { label: string; total: number }[]; monthly: { label: string; total: number }[] }> {
+  async incomeTrends(): Promise<{ daily: { label: string; total: number; transactions: number }[]; weekly: { label: string; total: number; transactions: number }[]; monthly: { label: string; total: number; transactions: number }[] }> {
     const response = await apiClient.get<ApiResponse<any>>(`${BASE}/income-trends`)
     return response.data.data
   },

@@ -56,6 +56,8 @@ export function CashierDashboard() {
   const [saleError, setSaleError] = useState('')
   const [customerReward, setCustomerReward] = useState<{ balance: number; type: string; progress: number } | null>(null)
   const [redeemFreeGallons, setRedeemFreeGallons] = useState('0')
+  const [lentInventoryProductId, setLentInventoryProductId] = useState('')
+  const [lentInventoryQuantity, setLentInventoryQuantity] = useState('0')
 
   const customerDropdownRef = useRef<HTMLDivElement>(null)
 
@@ -128,6 +130,7 @@ export function CashierDashboard() {
   }, [customers, customerName, selectedCustomerId])
 
   const refillProducts = allActiveProducts.filter((product) => product.isForSale)
+  const lendableProducts = allActiveProducts.filter((product) => product.isStockTracked)
   const refillProduct = refillProducts.find((product) => product.id === selectedProductId) ?? refillProducts[0] ?? null
   const refillPrice = Number(refillProduct?.basePrice ?? 0)
   const unitPrice = refillPrice
@@ -179,6 +182,8 @@ export function CashierDashboard() {
     setSaleError('')
     setCustomerReward(null)
     setRedeemFreeGallons('0')
+    setLentInventoryProductId('')
+    setLentInventoryQuantity('0')
   }
 
   const handleSaveSale = async () => {
@@ -233,6 +238,10 @@ export function CashierDashboard() {
       setSaleError('Customer name is required for delivery')
       return
     }
+    if (Number(lentInventoryQuantity) > 0 && !customerId) {
+      setSaleError('Select or create a customer before lending inventory')
+      return
+    }
 
     createSaleMutation.mutate({
       channel: saleType,
@@ -253,6 +262,8 @@ export function CashierDashboard() {
       ],
       notes: saleType === 'DELIVERY' ? customerAddress.trim() || null : null,
       redeemFreeGallons: rewardGallons,
+      lentInventoryProductId: Number(lentInventoryQuantity) > 0 ? lentInventoryProductId : null,
+      lentInventoryQuantity: Number(lentInventoryQuantity) || 0,
     })
   }
 
@@ -599,6 +610,35 @@ export function CashierDashboard() {
               </div>
             </div>
           )}
+
+          <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-3">
+            <div>
+              <p className="text-sm font-medium text-gray-900 dark:text-white">Inventory lent to customer</p>
+              <p className="text-xs text-gray-500">Optional. This moves returnable stock from At Shop to In Circulation as unpaid.</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Item</label>
+                <Select
+                  options={lendableProducts.map((product) => ({ value: product.id, label: product.name }))}
+                  value={lentInventoryProductId}
+                  onChange={(event) => setLentInventoryProductId(event.target.value)}
+                  placeholder="No item lent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Quantity lent</label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={lentInventoryQuantity}
+                  onChange={(event) => setLentInventoryQuantity(event.target.value)}
+                  disabled={!lentInventoryProductId}
+                />
+              </div>
+            </div>
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>

@@ -63,6 +63,22 @@ export function InventoryPage() {
     enabled: isOwner,
   })
 
+  const { data: inventoryLoans = [] } = useQuery({
+    queryKey: ['inventory', 'loans'],
+    queryFn: () => inventoryService.listInventoryLoans(),
+    enabled: isOwner,
+  })
+
+  const resolveLoanMutation = useMutation({
+    mutationFn: ({ id, action, amount }: { id: string; action: 'RETURN' | 'SOLD'; amount?: number }) =>
+      action === 'RETURN' ? inventoryService.returnInventoryLoan(id) : inventoryService.sellInventoryLoan(id, amount!, 'CASH'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
+      addToast({ type: 'success', title: 'Circulation record updated' })
+    },
+    onError: (err: any) => addToast({ type: 'error', title: err?.response?.data?.error?.message || 'Failed to update circulation record' }),
+  })
+
   const { data: recordedGallonSummary } = useQuery({
     queryKey: ['gallons', 'inventory-summary'],
     queryFn: async () => {
@@ -374,11 +390,15 @@ export function InventoryPage() {
         <p className="text-xs text-gray-500 dark:text-gray-400">{item.productSku}</p>
       </div>
     )},
-    { key: 'quantityOnHand', header: 'On Hand', render: (item: InventoryItem) => (
+    { key: 'originalCount', header: 'Original Count' },
+    { key: 'quantityOnHand', header: 'At Shop', render: (item: InventoryItem) => (
       <div>
         <p className="font-medium">{item.quantityOnHand}</p>
       </div>
     )},
+    { key: 'inCirculation', header: 'In Circulation' },
+    { key: 'soldQuantity', header: 'Sold' },
+    { key: 'currentBaseCount', header: 'Current Base' },
     { key: 'reorderLevel', header: 'Reorder Level' },
     {
       key: 'status',
@@ -558,6 +578,46 @@ export function InventoryPage() {
           searchPlaceholder="Search inventory..."
           emptyMessage="No inventory items found"
         />
+      )}
+
+      {isOwner && (
+        <Card className="mt-6">
+          <CardContent className="py-4">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Lent Inventory</h2>
+            <p className="text-sm text-gray-500 mb-4">See who holds shop property and resolve it when returned or paid.</p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead><tr className="border-b border-gray-200 dark:border-gray-700 text-left">
+                  <th className="py-2 pr-4">Customer</th><th className="py-2 pr-4">Item</th><th className="py-2 pr-4">Quantity</th><th className="py-2 pr-4">Status</th><th className="py-2 pr-4">Date Lent</th><th className="py-2">Actions</th>
+                </tr></thead>
+                <tbody>
+                  {inventoryLoans.map((loan) => (
+                    <tr key={loan.id} className="border-b border-gray-100 dark:border-gray-800">
+                      <td className="py-3 pr-4">{loan.customer.full_name}</td>
+                      <td className="py-3 pr-4">{loan.product.name}</td>
+                      <td className="py-3 pr-4">{loan.quantity}</td>
+                      <td className="py-3 pr-4"><Badge variant={loan.status === 'OUTSTANDING' ? 'warning' : loan.status === 'SOLD' ? 'success' : 'default'}>{loan.status === 'OUTSTANDING' ? 'Unpaid / In Circulation' : loan.status === 'SOLD' ? 'Paid / Sold' : 'Returned'}</Badge></td>
+                      <td className="py-3 pr-4">{new Date(loan.lent_at).toLocaleDateString()}</td>
+                      <td className="py-3"><div className="flex gap-2">
+                        {loan.status === 'OUTSTANDING' && <>
+                          <Button size="sm" variant="secondary" onClick={() => resolveLoanMutation.mutate({ id: loan.id, action: 'RETURN' })}>Returned</Button>
+                          <Button size="sm" onClick={() => {
+                            const entered = window.prompt(`Enter the total amount paid for ${loan.quantity} ${loan.product.name}:`)
+                            if (entered === null) return
+                            const amount = Number(entered)
+                            if (!Number.isFinite(amount) || amount <= 0) return addToast({ type: 'error', title: 'Enter a valid payment amount' })
+                            resolveLoanMutation.mutate({ id: loan.id, action: 'SOLD', amount })
+                          }}>Paid — Mark Sold</Button>
+                        </>}
+                      </div></td>
+                    </tr>
+                  ))}
+                  {inventoryLoans.length === 0 && <tr><td colSpan={6} className="py-6 text-center text-gray-500">No lent inventory records</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       <Modal open={isAddInventoryOpen} onClose={() => setIsAddInventoryOpen(false)} title="Add Inventory" size="md">

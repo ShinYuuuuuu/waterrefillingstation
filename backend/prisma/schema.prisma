@@ -28,6 +28,7 @@ model Tenant {
   maintenance_completions   MaintenanceCompletion[]
   inventory_ledgers         InventoryLedger[]
   inventory_update_requests InventoryUpdateRequest[]
+  inventory_loans           InventoryLoan[]
   notifications             Notification[]
   permissions               Permission[]
   product_categories        ProductCategory[]
@@ -67,6 +68,7 @@ model Branch {
   installment_plans         InstallmentPlan[]
   inventory_ledgers         InventoryLedger[]
   inventory_update_requests InventoryUpdateRequest[]
+  inventory_loans           InventoryLoan[]
   maintenance_schedules     MaintenanceSchedule[]
   production_batches        ProductionBatch[]
   rider_shifts              RiderShift[]
@@ -110,6 +112,7 @@ model User {
   refresh_tokens      RefreshToken[]
   rider_shifts        RiderShift[]
   sales_transactions  SalesTransaction[]     @relation("SalesTransactionUser")
+  inventory_loans     InventoryLoan[]        @relation("InventoryLoanCreatedBy")
   shifts              Shift[]
   user_roles          UserRoleAssignment[]
   branch              Branch?                @relation(fields: [branch_id], references: [id])
@@ -363,6 +366,7 @@ model Product {
   standing_order_items                  StandingOrderItem[]
   stock_count_items                     StockCountItem[]
   stock_transfer_items                  StockTransferItem[]
+  inventory_loans                       InventoryLoan[]
 
   @@unique([tenant_id, sku])
   @@index([category_id])
@@ -388,6 +392,39 @@ model BranchInventory {
   @@unique([branch_id, product_id])
   @@index([tenant_id])
   @@map("branch_inventory")
+}
+
+enum InventoryLoanStatus {
+  OUTSTANDING
+  RETURNED
+  SOLD
+}
+
+model InventoryLoan {
+  id          String              @id @default(uuid())
+  tenant_id   String
+  branch_id   String
+  product_id  String
+  customer_id String
+  sale_id     String?
+  quantity    Int
+  status      InventoryLoanStatus @default(OUTSTANDING)
+  notes       String?
+  lent_at     DateTime            @default(now()) @db.Timestamp(6)
+  resolved_at DateTime?           @db.Timestamp(6)
+  created_by  String
+  created_at  DateTime            @default(now()) @db.Timestamp(6)
+  updated_at  DateTime            @default(now()) @db.Timestamp(6)
+  tenant      Tenant              @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  branch      Branch              @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+  product     Product             @relation(fields: [product_id], references: [id])
+  customer    Customer            @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  creator     User                @relation("InventoryLoanCreatedBy", fields: [created_by], references: [id])
+
+  @@index([tenant_id, branch_id, status])
+  @@index([customer_id, status])
+  @@index([product_id, status])
+  @@map("inventory_loans")
 }
 
 model InventoryLedger {
@@ -776,6 +813,7 @@ model Customer {
   delivery_orders          DeliveryOrder[]
   installment_plans        InstallmentPlan[]
   loyalty_transactions     LoyaltyTransaction[]
+  inventory_loans          InventoryLoan[]
   payments                 Payment[]
   refunds                  Refund[]
   reseller                 Reseller?

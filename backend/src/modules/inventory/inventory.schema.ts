@@ -1,4 +1,10 @@
 import { z } from 'zod'
+
+export const inventoryLoanIdSchema = z.object({ params: z.object({ loanId: z.string().uuid() }) })
+export const sellInventoryLoanSchema = z.object({
+  params: z.object({ loanId: z.string().uuid() }),
+  body: z.object({ amount: z.number().positive(), paymentMethod: z.enum(['CASH', 'GCASH', 'MAYA', 'BANK_TRANSFER']) }),
+})
 import { AdjustmentReason, MovementType, StockTransferStatus, StockCountStatus, ProductionBatchStatus } from './inventory.types'
 
 /**

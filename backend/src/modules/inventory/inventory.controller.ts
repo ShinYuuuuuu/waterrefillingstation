@@ -34,6 +34,29 @@ import {
  * already typed-safe by the time the handler runs.
  */
 export const inventoryController = {
+  async listInventoryLoans(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await inventoryService.listInventoryLoans(buildContext(req))
+      return res.status(httpStatus.OK).json(successResponse(result))
+    } catch (error) { next(error) }
+  },
+
+  async returnInventoryLoan(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { loanId } = req.validatedParams as { loanId: string }
+      const result = await inventoryService.resolveInventoryLoan(loanId, 'RETURN', buildContext(req))
+      return res.status(httpStatus.OK).json(successResponse(result))
+    } catch (error) { next(error) }
+  },
+
+  async sellInventoryLoan(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { loanId } = req.validatedParams as { loanId: string }
+      const { amount, paymentMethod } = req.validatedBody as { amount: number; paymentMethod: 'CASH' | 'GCASH' | 'MAYA' | 'BANK_TRANSFER' }
+      const result = await inventoryService.resolveInventoryLoan(loanId, 'SOLD', buildContext(req), { amount, paymentMethod })
+      return res.status(httpStatus.OK).json(successResponse(result))
+    } catch (error) { next(error) }
+  },
   // ========================================================================
   // BRANCH INVENTORY — CRUD
   // =========================================================================

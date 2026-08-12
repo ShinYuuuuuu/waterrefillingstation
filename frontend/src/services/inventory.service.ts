@@ -16,6 +16,7 @@ import type {
   CreateInventoryUpdateRequest,
   CreateInventoryRequest,
   UpdateInventoryRequest,
+  InventoryLoan,
 } from '@/types/inventory'
 
 interface ApiMeta {
@@ -50,6 +51,10 @@ function toInventoryItem(raw: any, productName: string, productSku: string): Inv
     lastCountedAt: raw.last_counted_at ?? raw.lastCountedAt ?? null,
     createdAt: raw.created_at ?? raw.createdAt,
     updatedAt: raw.updated_at ?? raw.updatedAt,
+    inCirculation: Number(raw.in_circulation ?? raw.inCirculation ?? 0),
+    soldQuantity: Number(raw.sold_quantity ?? raw.soldQuantity ?? 0),
+    currentBaseCount: Number(raw.current_base_count ?? raw.currentBaseCount ?? quantityOnHand),
+    originalCount: Number(raw.original_count ?? raw.originalCount ?? quantityOnHand),
   }
 }
 
@@ -72,6 +77,18 @@ function toLedgerEntry(raw: any): LedgerEntry {
 }
 
 export const inventoryService = {
+  async listInventoryLoans(): Promise<InventoryLoan[]> {
+    const response = await apiClient.get<ApiResponse<InventoryLoan[]>>(`${API_ENDPOINTS.INVENTORY}/loans`)
+    return response.data.data ?? []
+  },
+
+  async returnInventoryLoan(id: string): Promise<void> {
+    await apiClient.post(`${API_ENDPOINTS.INVENTORY}/loans/${id}/return`)
+  },
+
+  async sellInventoryLoan(id: string, amount: number, paymentMethod: string): Promise<void> {
+    await apiClient.post(`${API_ENDPOINTS.INVENTORY}/loans/${id}/sell`, { amount, paymentMethod })
+  },
   async createBranchInventory(payload: CreateInventoryRequest): Promise<InventoryItem> {
     const response = await apiClient.post<ApiResponse<any>>(`${API_ENDPOINTS.INVENTORY}/branch`, payload)
     const raw = response.data.data
