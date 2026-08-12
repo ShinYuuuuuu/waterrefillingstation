@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { FiPlus, FiTrash2 } from 'react-icons/fi'
 import { productService } from '@/services/product.service'
+import { inventoryService } from '@/services/inventory.service'
 import type { Product, ProductType, CreateProductRequest, UpdateProductRequest } from '@/types/product'
 import { useToast } from '@/components/ui/toast'
 
@@ -53,6 +54,7 @@ export function ProductsPage() {
     isActive: boolean
     isStockTracked: boolean
     isForSale: boolean
+    openingQuantity: number | string
   }>({
     categoryId: '',
     sku: '',
@@ -66,6 +68,7 @@ export function ProductsPage() {
     isActive: true,
     isStockTracked: true,
     isForSale: true,
+    openingQuantity: '',
   })
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
 
@@ -85,7 +88,18 @@ export function ProductsPage() {
   })
 
   const createMutation = useMutation({
-    mutationFn: (payload: CreateProductRequest) => productService.create(payload),
+    mutationFn: async (payload: CreateProductRequest) => {
+      const product = await productService.create(payload)
+      if (payload.isStockTracked) {
+        try {
+          await inventoryService.createBranchInventory({ productId: product.id, quantityOnHand: Number(formData.openingQuantity) || 0 })
+        } catch (error) {
+          await productService.remove(product.id).catch(() => undefined)
+          throw error
+        }
+      }
+      return product
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] })
       setIsFormOpen(false)
@@ -175,6 +189,7 @@ export function ProductsPage() {
       isActive: true,
       isStockTracked: true,
       isForSale: true,
+      openingQuantity: '',
     })
     setFormErrors({})
   }
@@ -202,6 +217,7 @@ export function ProductsPage() {
       isActive: product.isActive,
       isStockTracked: product.isStockTracked,
       isForSale: product.isForSale,
+      openingQuantity: '',
     })
     setFormErrors({})
     setIsFormOpen(true)
@@ -212,6 +228,7 @@ export function ProductsPage() {
     if (!formData.sku.trim()) errors.sku = 'Stock Keeping Unit is required'
     if (!formData.name.trim()) errors.name = 'Product name is required'
     if (!formData.unitOfMeasure.trim()) errors.unitOfMeasure = 'Unit of measure is required'
+    if (!editingProduct && formData.isStockTracked && (!Number.isInteger(Number(formData.openingQuantity)) || Number(formData.openingQuantity) < 0)) errors.openingQuantity = 'Opening stock must be a valid whole number'
     setFormErrors(errors)
     return Object.keys(errors).length === 0
   }
@@ -300,12 +317,12 @@ export function ProductsPage() {
     },
     {
       key: 'basePrice',
-      header: 'Price',
+      header: 'Selling Price',
       render: (item: Product) => `₱${Number(item.basePrice).toFixed(2)}`,
     },
     {
       key: 'reorderLevel',
-      header: 'Low-stock threshold',
+      header: 'Order Reminder At',
       render: (item: Product) => String(item.reorderLevel),
     },
     {
@@ -505,10 +522,10 @@ export function ProductsPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Unit Price
+                Selling Price
               </label>
               <Input
                 type="number"
@@ -519,25 +536,26 @@ export function ProductsPage() {
                 placeholder="Enter price"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Cost Price
-              </label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={formData.costPrice}
-                onChange={(e) => setFormData({ ...formData, costPrice: e.target.value })}
-                placeholder="Enter cost"
-              />
-            </div>
           </div>
 
           {formData.isStockTracked && <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {!editingProduct && <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Opening stock
+              </label>
+              <Input
+                type="number"
+                min="0"
+                step="1"
+                value={formData.openingQuantity}
+                onChange={(e) => setFormData({ ...formData, openingQuantity: e.target.value })}
+                placeholder="How many are currently at the shop?"
+                error={formErrors.openingQuantity}
+              />
+            </div>}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Reorder Level
+                Remind me to order when stock reaches
               </label>
               <Input
                 type="number"
@@ -545,7 +563,7 @@ export function ProductsPage() {
                 step="1"
                 value={formData.reorderLevel}
                 onChange={(e) => setFormData({ ...formData, reorderLevel: e.target.value })}
-                placeholder="Enter quantity"
+                placeholder="e.g. 10"
               />
             </div>
           </div>}

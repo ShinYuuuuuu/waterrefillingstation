@@ -15,7 +15,6 @@ import { useAuthContext } from '@/contexts/auth-context'
 import { apiClient } from '@/api/client'
 import { inventoryService } from '@/services/inventory.service'
 import { productService } from '@/services/product.service'
-import { gallonService } from '@/services/gallon.service'
 import type {
   InventoryItem,
   LedgerEntry,
@@ -49,12 +48,17 @@ export function InventoryPage() {
   const [adjustError, setAdjustError] = useState('')
   const [updateCountForm, setUpdateCountForm] = useState({ quantity: '', notes: '' })
   const [updateCountError, setUpdateCountError] = useState('')
-  const [addInventoryForm, setAddInventoryForm] = useState({ itemName: '', quantityOnHand: '', reorderLevel: '' })
+  const [addInventoryForm, setAddInventoryForm] = useState({ productId: '', quantityOnHand: '' })
   const [addInventoryError, setAddInventoryError] = useState('')
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['inventory', 'branch', searchQuery, page, lowStockOnly],
     queryFn: () => inventoryService.listBranchInventory({ page, limit: 20, search: searchQuery || undefined, lowStock: lowStockOnly || undefined }),
+  })
+  const { data: stockTrackedProducts } = useQuery({
+    queryKey: ['products', 'without-inventory'],
+    queryFn: () => productService.list({ page: 1, limit: 100, isActive: true, isStockTracked: true }),
+    enabled: isOwner,
   })
 
   const { data: lowStockAlerts } = useQuery({
@@ -69,41 +73,6 @@ export function InventoryPage() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['inventory'] }); addToast({ type: 'success', title: 'Circulation record updated' }) },
     onError: (err: any) => addToast({ type: 'error', title: err?.response?.data?.error?.message || 'Failed to update circulation record' }),
   })
-
-  const { data: recordedGallonSummary } = useQuery({
-    queryKey: ['gallons', 'inventory-summary'],
-    queryFn: async () => {
-      const statuses = ['IN_STOCK', 'WITH_CUSTOMER', 'WITH_RIDER', 'WITH_RESELLER', 'DAMAGED', 'LOST']
-      const results = await Promise.all(
-        statuses.map((status) => gallonService.listGallons({ page: 1, limit: 1, status })),
-      )
-      const totals = Object.fromEntries(statuses.map((status, index) => [status, results[index].meta.total]))
-      const inCirculation = totals.WITH_CUSTOMER + totals.WITH_RIDER + totals.WITH_RESELLER
-      return {
-        atShop: totals.IN_STOCK,
-        inCirculation,
-        damaged: totals.DAMAGED,
-        lost: totals.LOST,
-        totalOwned: totals.IN_STOCK + inCirculation + totals.DAMAGED + totals.LOST,
-      }
-    },
-    enabled: isOwner,
-  })
-
-  const gallonInventoryItem = (data?.data ?? []).find((item) =>
-    /gallon/i.test(`${item.productName} ${item.productSku}`),
-  )
-  const gallonSummary = recordedGallonSummary
-    ? {
-        ...recordedGallonSummary,
-        atShop: gallonInventoryItem?.quantityOnHand ?? recordedGallonSummary.atShop,
-        inCirculation: Math.max(
-          0,
-          recordedGallonSummary.totalOwned
-            - (gallonInventoryItem?.quantityOnHand ?? recordedGallonSummary.atShop),
-        ),
-      }
-    : undefined
 
   const { data: historyData, refetch: refetchHistory } = useQuery({
     queryKey: ['inventory', 'ledger', selectedItem?.productId],
@@ -171,37 +140,15 @@ export function InventoryPage() {
 
   const addInventoryMutation = useMutation({
     mutationFn: async () => {
-      const skuName = addInventoryForm.itemName
-        .trim()
-        .toUpperCase()
-        .replace(/[^A-Z0-9]+/g, '-')
-        .replace(/^-|-$/g, '')
-        .slice(0, 30) || 'ITEM'
-      const product = await productService.create({
-        sku: `${skuName}-${Date.now().toString().slice(-6)}`,
-        name: addInventoryForm.itemName.trim(),
-        type: 'RAW_MATERIAL',
-        unitOfMeasure: 'piece',
-        basePrice: 0,
-        costPrice: 0,
-        reorderLevel: Number(addInventoryForm.reorderLevel),
-        isActive: true,
+      return inventoryService.createBranchInventory({
+        productId: addInventoryForm.productId,
+        quantityOnHand: Number(addInventoryForm.quantityOnHand),
       })
-
-      try {
-        return await inventoryService.createBranchInventory({
-          productId: product.id,
-          quantityOnHand: Number(addInventoryForm.quantityOnHand),
-        })
-      } catch (error) {
-        await productService.remove(product.id).catch(() => undefined)
-        throw error
-      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['inventory'] })
       setIsAddInventoryOpen(false)
-      setAddInventoryForm({ itemName: '', quantityOnHand: '', reorderLevel: '' })
+      setAddInventoryForm({ productId: '', quantityOnHand: '' })
       setAddInventoryError('')
       addToast({ type: 'success', title: 'Inventory added successfully' })
     },
@@ -212,13 +159,12 @@ export function InventoryPage() {
 
   const handleAddInventory = () => {
     const quantity = Number(addInventoryForm.quantityOnHand)
-    const reorderLevel = Number(addInventoryForm.reorderLevel)
-    if (!addInventoryForm.itemName.trim()) {
-      setAddInventoryError('Enter an inventory item name')
+    if (!addInventoryForm.productId) {
+      setAddInventoryError('Select a product')
       return
     }
-    if (!Number.isInteger(quantity) || quantity < 0 || !Number.isInteger(reorderLevel) || reorderLevel < 0) {
-      setAddInventoryError('Quantity and reorder level must be valid whole numbers')
+    if (!Number.isInteger(quantity) || quantity < 0) {
+      setAddInventoryError('Opening quantity must be a valid whole number')
       return
     }
     setAddInventoryError('')
@@ -313,7 +259,7 @@ export function InventoryPage() {
       return
     }
     if (!Number.isInteger(quantity) || quantity < 0 || !Number.isInteger(reorderLevel) || reorderLevel < 0) {
-      setAdjustError('Quantity and low-stock level must be valid whole numbers')
+      setAdjustError('Quantity and order-reminder count must be valid whole numbers')
       return
     }
     setAdjustError('')
@@ -408,7 +354,7 @@ export function InventoryPage() {
     { key: 'inCirculation', header: 'In Circulation' },
     { key: 'soldQuantity', header: 'Sold' },
     { key: 'currentBaseCount', header: 'Current Base' },
-    { key: 'reorderLevel', header: 'Reorder Level' },
+    { key: 'reorderLevel', header: 'Order Reminder At' },
     {
       key: 'status',
       header: 'Status',
@@ -426,6 +372,8 @@ export function InventoryPage() {
   ], [])
 
   const items = data?.data ?? []
+  const inventoryProductIds = new Set(items.map((item) => item.productId))
+  const productsWithoutInventory = (stockTrackedProducts?.data ?? []).filter((product) => product.isStockTracked && !inventoryProductIds.has(product.id))
   const pagination = data?.meta
     ? {
         page: data.meta.page,
@@ -509,23 +457,6 @@ export function InventoryPage() {
         </div>
       </div>
 
-      {isOwner && gallonSummary && (
-        <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {[
-            ['Total Gallons', gallonSummary.totalOwned],
-            ['At the Shop', gallonSummary.atShop],
-            ['In Circulation', gallonSummary.inCirculation],
-          ].map(([label, value]) => (
-            <Card key={String(label)}>
-              <CardContent className="py-4">
-                <p className="text-sm text-gray-500 dark:text-gray-400">{label}</p>
-                <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-
       {lowStockAlerts && lowStockAlerts.length > 0 && (
         <Card className="mt-4 border-yellow-200 dark:border-yellow-800">
           <CardContent className="py-4">
@@ -602,13 +533,15 @@ export function InventoryPage() {
       <Modal open={isAddInventoryOpen} onClose={() => setIsAddInventoryOpen(false)} title="Add Inventory" size="md">
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Item name</label>
-            <Input
-              value={addInventoryForm.itemName}
-              onChange={(event) => setAddInventoryForm({ ...addInventoryForm, itemName: event.target.value })}
-              placeholder="e.g. Bottle caps"
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Existing product or inventory supply</label>
+            <Select
+              value={addInventoryForm.productId}
+              onChange={(event) => { setAddInventoryForm({ ...addInventoryForm, productId: event.target.value }); setAddInventoryError('') }}
+              options={productsWithoutInventory.map((product) => ({ value: product.id, label: `${product.name} — ${product.sku}` }))}
+              placeholder="Select an item without inventory"
               error={addInventoryError}
             />
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Create new items in Products & Services first. This prevents duplicate product records.</p>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Opening quantity</label>
@@ -618,17 +551,6 @@ export function InventoryPage() {
               step="1"
               value={addInventoryForm.quantityOnHand}
               onChange={(event) => setAddInventoryForm({ ...addInventoryForm, quantityOnHand: event.target.value })}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Low-stock level</label>
-            <Input
-              type="number"
-              min="0"
-              step="1"
-              value={addInventoryForm.reorderLevel}
-              onChange={(event) => setAddInventoryForm({ ...addInventoryForm, reorderLevel: event.target.value })}
-              placeholder="Notify when stock reaches this amount"
             />
           </div>
           <div className="flex justify-end gap-3">
@@ -671,7 +593,7 @@ export function InventoryPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Low-stock level</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Remind me to order when stock reaches</label>
                 <Input
                   type="number"
                   min="0"
@@ -851,7 +773,7 @@ export function InventoryPage() {
         title="Report Still Low Stock"
         description={
           selectedItem
-            ? `Confirm that "${selectedItem.productName}" is still below reorder level (current: ${selectedItem.availableQuantity}, reorder: ${selectedItem.reorderLevel})?`
+            ? `Confirm that "${selectedItem.productName}" is at or below its order reminder (current: ${selectedItem.availableQuantity}, reminder: ${selectedItem.reorderLevel})?`
             : ''
         }
         confirmText="Report Still Low"

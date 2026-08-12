@@ -407,7 +407,7 @@ export function CashierDashboard() {
                   <div key={alert.productId} className="flex items-center justify-between p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded">
                     <div>
                       <p className="text-sm font-medium">{alert.productName}</p>
-                      <p className="text-xs text-gray-500">Available: {alert.availableQuantity} / Reorder: {alert.reorderLevel}</p>
+                      <p className="text-xs text-gray-500">Available: {alert.availableQuantity} / Order reminder: {alert.reorderLevel}</p>
                     </div>
                     <Badge variant="warning">Low</Badge>
                   </div>

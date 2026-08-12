@@ -10,7 +10,7 @@ import { Modal } from '@/components/ui/modal'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
-import { FiPlus, FiEdit, FiTrash2, FiEye } from 'react-icons/fi'
+import { FiPlus, FiEdit, FiTrash2 } from 'react-icons/fi'
 import { customerService } from '@/services/customer.service'
 import type { Customer, CustomerType, CreateCustomerRequest, UpdateCustomerRequest } from '@/types/customer'
 import { useToast } from '@/components/ui/toast'
@@ -266,23 +266,6 @@ export function CustomersPage() {
         return last ? new Date(last).toLocaleDateString() : 'N/A'
       },
     },
-    ...(isOwner ? [{
-      key: 'actions',
-      header: 'Actions',
-      render: (item: Customer) => (
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={(event) => { event.stopPropagation(); setHistoryCustomerId(item.id) }}>
-            <FiEye className="w-4 h-4" />
-          </Button>
-          <Button variant="ghost" size="sm" onClick={(event) => { event.stopPropagation(); openEditForm(item) }}>
-            <FiEdit className="w-4 h-4" />
-          </Button>
-          <Button variant="ghost" size="sm" onClick={(event) => { event.stopPropagation(); setDeleteTargetId(item.id) }}>
-            <FiTrash2 className="w-4 h-4 text-red-600" />
-          </Button>
-        </div>
-      ),
-    }] : []),
   ]
 
   const pagination = data?.meta
@@ -481,6 +464,34 @@ export function CustomersPage() {
       >
         {historyCustomerId && (
           <div className="space-y-4">
+            {isOwner && (() => {
+              const selectedCustomer = data?.data?.find((customer) => customer.id === historyCustomerId)
+              if (!selectedCustomer) return null
+              return (
+                <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                  <Button
+                    className="w-full sm:w-auto"
+                    variant="secondary"
+                    onClick={() => {
+                      setHistoryCustomerId(null)
+                      openEditForm(selectedCustomer)
+                    }}
+                  >
+                    <FiEdit className="w-4 h-4 mr-2" /> Edit Customer
+                  </Button>
+                  <Button
+                    className="w-full sm:w-auto"
+                    variant="danger"
+                    onClick={() => {
+                      setHistoryCustomerId(null)
+                      setDeleteTargetId(selectedCustomer.id)
+                    }}
+                  >
+                    <FiTrash2 className="w-4 h-4 mr-2" /> Delete Customer
+                  </Button>
+                </div>
+              )
+            })()}
             <div className="rounded-lg border border-primary-200 dark:border-primary-800 p-4 space-y-3">
               <div><h3 className="font-semibold text-gray-900 dark:text-white">Record Gallons for this Customer</h3><p className="text-xs text-gray-500 dark:text-gray-300">Unpaid gallons enter circulation. Paid gallons are immediately recorded as sold.</p></div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
