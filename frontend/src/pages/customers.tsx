@@ -207,6 +207,9 @@ export function CustomersPage() {
   }
 
   const outstandingCustomerIds = new Set(inventoryLoans.filter((loan) => loan.status === 'OUTSTANDING').map((loan) => loan.customer_id))
+  const outstandingGallonsFor = (customerId: string) => inventoryLoans
+    .filter((loan) => loan.customer_id === customerId && loan.status === 'OUTSTANDING')
+    .reduce((total, loan) => total + loan.quantity, 0)
   const customers = [...(data?.data ?? [])].filter((customer) => customerTab !== 'lent' || outstandingCustomerIds.has(customer.id)).sort((a, b) => customerSort === 'type' ? a.customerType.localeCompare(b.customerType) || a.fullName.localeCompare(b.fullName) : customerSort === 'recent' ? new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime() : a.fullName.localeCompare(b.fullName))
   const isSubmitting = createMutation.isPending || updateMutation.isPending
   const isDeleting = deleteMutation.isPending
@@ -235,7 +238,7 @@ export function CustomersPage() {
     },
     {
       key: 'rewards',
-      header: 'Free Gallons',
+      header: 'Free Refills',
       render: (item: Customer) => (
         <div><strong>{item.freeGallonsBalance}</strong><p className="text-xs text-gray-500">Progress: {item.rewardGallonProgress}/{item.customerType === 'RESELLER' ? '5 gallons' : '10 gallons'}</p></div>
       ),
@@ -247,8 +250,13 @@ export function CustomersPage() {
     },
     {
       key: 'totalGallons',
-      header: 'Total Gallons',
+      header: 'Total Refills',
       render: (item: Customer) => purchaseSummaryQueries.data?.[item.id]?.totalGallons ?? 0,
+    },
+    {
+      key: 'lentGallons',
+      header: 'Lent Gallons',
+      render: (item: Customer) => outstandingGallonsFor(item.id),
     },
     {
       key: 'totalSpent',
@@ -507,7 +515,7 @@ export function CustomersPage() {
               <div className="flex justify-end"><Button className="w-full sm:w-auto" onClick={handleCreateLoan} loading={createLoanMutation.isPending}>Record Gallons</Button></div>
             </div>
             <div>
-              <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Lent Gallons</h3>
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Lent Gallons ({outstandingGallonsFor(historyCustomerId)} outstanding)</h3>
               <div className="space-y-2">
                 {inventoryLoans.filter((loan) => loan.customer_id === historyCustomerId).map((loan) => (
                   <div key={loan.id} className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">

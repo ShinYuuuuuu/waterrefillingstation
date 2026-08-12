@@ -129,9 +129,9 @@ export class SaleService {
     })
     const gallonQuantity = gallonItems.reduce((sum, item) => sum + item.quantity, 0)
     const redeemFreeGallons = data.redeemFreeGallons ?? 0
-    if (redeemFreeGallons > 0 && !customer) throw new AppError(httpStatus.BAD_REQUEST, 'Select a customer to redeem free gallons')
-    if (redeemFreeGallons > (customer?.free_gallons_balance ?? 0)) throw new AppError(httpStatus.BAD_REQUEST, 'Customer does not have enough free gallons')
-    if (redeemFreeGallons > gallonQuantity) throw new AppError(httpStatus.BAD_REQUEST, 'Free gallons cannot exceed gallons in this sale')
+    if (redeemFreeGallons > 0 && !customer) throw new AppError(httpStatus.BAD_REQUEST, 'Select a customer to claim free refills')
+    if (redeemFreeGallons > (customer?.free_gallons_balance ?? 0)) throw new AppError(httpStatus.BAD_REQUEST, 'Customer does not have enough free refills')
+    if (redeemFreeGallons > gallonQuantity) throw new AppError(httpStatus.BAD_REQUEST, 'Free refills cannot exceed the refill quantity in this sale')
     const rewardUnitPrice = gallonItems[0]?.unitPrice ?? 0
     const rewardDiscount = redeemFreeGallons * rewardUnitPrice
     const discountTotal = (data.discountTotal ?? 0) + rewardDiscount
