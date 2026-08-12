@@ -208,6 +208,7 @@ export interface SaleListQuery {
   startDate?: string
   endDate?: string
   search?: string
+  productId?: string
   sortBy?: 'created_at' | 'updated_at' | 'invoice_number' | 'grand_total'
   sortOrder?: 'asc' | 'desc'
 }

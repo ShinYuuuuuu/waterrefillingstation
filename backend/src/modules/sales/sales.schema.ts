@@ -131,6 +131,7 @@ export const saleListQuerySchema = z.object({
     startDate: z.string().datetime().optional(),
     endDate: z.string().datetime().optional(),
     search: z.string().optional(),
+    productId: z.string().uuid('Invalid product ID').optional(),
   }),
 })
 

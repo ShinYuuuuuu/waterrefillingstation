@@ -14,10 +14,16 @@ import { FiPlus, FiEdit, FiTrash2, FiEye } from 'react-icons/fi'
 import { customerService } from '@/services/customer.service'
 import type { Customer, CustomerType, CreateCustomerRequest, UpdateCustomerRequest } from '@/types/customer'
 import { useToast } from '@/components/ui/toast'
+import { useAuthContext } from '@/contexts/auth-context'
+import { inventoryService } from '@/services/inventory.service'
 
 export function CustomersPage() {
   const queryClient = useQueryClient()
   const { addToast } = useToast()
+  const { user } = useAuthContext()
+  const isOwner = user?.role === 'owner'
+  const [customerTab, setCustomerTab] = useState<'all' | 'regular' | 'reseller' | 'lent'>('all')
+  const [customerSort, setCustomerSort] = useState<'name' | 'type' | 'recent'>('name')
   const [searchQuery, setSearchQuery] = useState('')
   const [page, setPage] = useState(1)
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -25,19 +31,19 @@ export function CustomersPage() {
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
   const [historyCustomerId, setHistoryCustomerId] = useState<string | null>(null)
   const [historyPage, setHistoryPage] = useState(1)
+  const [loanForm, setLoanForm] = useState({ productId: '', quantity: '', paymentStatus: 'UNPAID', amount: '', paymentMethod: 'CASH' })
+  const [loanError, setLoanError] = useState('')
 
   const [formData, setFormData] = useState<{
     customerType: CustomerType
     fullName: string
     phone: string
-    companyName?: string | null
-    email?: string | null
-    tin?: string | null
-    creditLimit?: number | string
+    address: string
   }>({
     customerType: 'RETAIL',
     fullName: '',
     phone: '',
+    address: '',
   })
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
 
@@ -46,8 +52,31 @@ export function CustomersPage() {
   }, [searchQuery])
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['customers', searchQuery, page],
-    queryFn: () => customerService.list({ search: searchQuery || undefined, page, limit: 20 }),
+    queryKey: ['customers', searchQuery, page, customerTab],
+    queryFn: () => customerService.list({ search: searchQuery || undefined, page: customerTab === 'lent' ? 1 : page, limit: customerTab === 'lent' ? 100 : 20, customerType: customerTab === 'regular' ? 'RETAIL' : customerTab === 'reseller' ? 'RESELLER' : undefined }),
+  })
+
+  const { data: inventoryLoans = [] } = useQuery({ queryKey: ['inventory', 'loans'], queryFn: () => inventoryService.listInventoryLoans() })
+  const { data: inventoryItems } = useQuery({ queryKey: ['inventory', 'customer-loan-options'], queryFn: () => inventoryService.listBranchInventory({ page: 1, limit: 100 }) })
+  const createLoanMutation = useMutation({
+    mutationFn: () => inventoryService.createInventoryLoan({
+      customerId: historyCustomerId!, productId: loanForm.productId, quantity: Number(loanForm.quantity),
+      paid: loanForm.paymentStatus === 'PAID', amount: loanForm.paymentStatus === 'PAID' ? Number(loanForm.amount) : undefined,
+      paymentMethod: loanForm.paymentMethod,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
+      queryClient.invalidateQueries({ queryKey: ['sales'] })
+      setLoanForm({ productId: '', quantity: '', paymentStatus: 'UNPAID', amount: '', paymentMethod: 'CASH' })
+      setLoanError('')
+      addToast({ type: 'success', title: loanForm.paymentStatus === 'PAID' ? 'Paid gallons recorded as sold' : 'Lent gallons recorded' })
+    },
+    onError: (err: any) => addToast({ type: 'error', title: err?.response?.data?.error?.message || 'Failed to record gallons' }),
+  })
+  const resolveLoanMutation = useMutation({
+    mutationFn: ({ id, action, amount }: { id: string; action: 'RETURN' | 'SOLD'; amount?: number }) => action === 'RETURN' ? inventoryService.returnInventoryLoan(id) : inventoryService.sellInventoryLoan(id, amount!, 'CASH'),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['inventory'] }); addToast({ type: 'success', title: 'Lent gallon record updated' }) },
+    onError: (err: any) => addToast({ type: 'error', title: err?.response?.data?.error?.message || 'Failed to update lent gallons' }),
   })
 
   const purchaseSummaryQueries = useQuery({
@@ -114,6 +143,7 @@ export function CustomersPage() {
       customerType: 'RETAIL',
       fullName: '',
       phone: '',
+      address: '',
     })
     setFormErrors({})
   }
@@ -130,10 +160,7 @@ export function CustomersPage() {
       customerType: customer.customerType,
       fullName: customer.fullName,
       phone: customer.phone,
-      companyName: customer.companyName,
-      email: customer.email,
-      tin: customer.tin,
-      creditLimit: customer.creditLimit,
+      address: typeof customer.metadata?.address === 'string' ? customer.metadata.address : '',
     })
     setFormErrors({})
     setIsFormOpen(true)
@@ -149,10 +176,19 @@ export function CustomersPage() {
 
   const handleSubmit = () => {
     if (!validateForm()) return
+    const payload = {
+      customerType: formData.customerType,
+      fullName: formData.fullName,
+      phone: formData.phone,
+      metadata: {
+        ...(editingCustomer?.metadata ?? {}),
+        address: formData.address.trim(),
+      },
+    }
     if (editingCustomer) {
-      updateMutation.mutate({ id: editingCustomer.id, payload: formData })
+      updateMutation.mutate({ id: editingCustomer.id, payload })
     } else {
-      createMutation.mutate(formData)
+      createMutation.mutate(payload)
     }
   }
 
@@ -162,7 +198,16 @@ export function CustomersPage() {
     }
   }
 
-  const customers = data?.data ?? []
+  const handleCreateLoan = () => {
+    const quantity = Number(loanForm.quantity)
+    if (!loanForm.productId || !Number.isInteger(quantity) || quantity < 1) return setLoanError('Select an inventory item and enter a valid quantity')
+    if (loanForm.paymentStatus === 'PAID' && (!Number.isFinite(Number(loanForm.amount)) || Number(loanForm.amount) <= 0)) return setLoanError('Enter the amount paid')
+    setLoanError('')
+    createLoanMutation.mutate()
+  }
+
+  const outstandingCustomerIds = new Set(inventoryLoans.filter((loan) => loan.status === 'OUTSTANDING').map((loan) => loan.customer_id))
+  const customers = [...(data?.data ?? [])].filter((customer) => customerTab !== 'lent' || outstandingCustomerIds.has(customer.id)).sort((a, b) => customerSort === 'type' ? a.customerType.localeCompare(b.customerType) || a.fullName.localeCompare(b.fullName) : customerSort === 'recent' ? new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime() : a.fullName.localeCompare(b.fullName))
   const isSubmitting = createMutation.isPending || updateMutation.isPending
   const isDeleting = deleteMutation.isPending
 
@@ -172,7 +217,13 @@ export function CustomersPage() {
       header: 'Customer Name',
       render: (item: Customer) => (
         <div>
-          <p className="font-medium text-gray-900 dark:text-white">{item.fullName}</p>
+          <button
+            type="button"
+            className="font-medium text-left text-primary-700 hover:underline dark:text-primary-300"
+            onClick={(event) => { event.stopPropagation(); setHistoryCustomerId(item.id) }}
+          >
+            {item.fullName}
+          </button>
           <p className="text-xs text-gray-500 dark:text-gray-400">{item.phone}</p>
         </div>
       ),
@@ -215,23 +266,23 @@ export function CustomersPage() {
         return last ? new Date(last).toLocaleDateString() : 'N/A'
       },
     },
-    {
+    ...(isOwner ? [{
       key: 'actions',
       header: 'Actions',
       render: (item: Customer) => (
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => setHistoryCustomerId(item.id)}>
+          <Button variant="ghost" size="sm" onClick={(event) => { event.stopPropagation(); setHistoryCustomerId(item.id) }}>
             <FiEye className="w-4 h-4" />
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => openEditForm(item)}>
+          <Button variant="ghost" size="sm" onClick={(event) => { event.stopPropagation(); openEditForm(item) }}>
             <FiEdit className="w-4 h-4" />
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => setDeleteTargetId(item.id)}>
+          <Button variant="ghost" size="sm" onClick={(event) => { event.stopPropagation(); setDeleteTargetId(item.id) }}>
             <FiTrash2 className="w-4 h-4 text-red-600" />
           </Button>
         </div>
       ),
-    },
+    }] : []),
   ]
 
   const pagination = data?.meta
@@ -292,11 +343,21 @@ export function CustomersPage() {
         { label: 'Customers' },
       ]}
     >
-      <div className="flex justify-end">
-        <Button onClick={openCreateForm}>
-          <FiPlus className="w-4 h-4 mr-2" />
-          Add Customer
-        </Button>
+      <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3 mb-4">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+          {([['all', 'All Customers'], ['regular', 'Regular'], ['reseller', 'Resellers'], ['lent', 'Lent Gallons']] as const).map(([value, label]) => (
+            <Button key={value} className="w-full whitespace-nowrap sm:w-auto" size="sm" variant={customerTab === value ? 'primary' : 'secondary'} onClick={() => { setCustomerTab(value); setPage(1) }}>{label}</Button>
+          ))}
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="w-full sm:w-52">
+            <Select className="truncate" aria-label="Sort customers" options={[{ value: 'name', label: 'Name (A–Z)' }, { value: 'type', label: 'Customer type' }, { value: 'recent', label: 'Recently updated' }]} value={customerSort} onChange={(event) => setCustomerSort(event.target.value as typeof customerSort)} />
+          </div>
+          <Button className="w-full whitespace-nowrap sm:w-auto" onClick={openCreateForm}>
+            <FiPlus className="w-4 h-4 mr-2" />
+            Add Customer
+          </Button>
+        </div>
       </div>
 
       {customers.length === 0 ? (
@@ -320,6 +381,8 @@ export function CustomersPage() {
           onSearchChange={setSearchQuery}
           searchPlaceholder="Search customers..."
           emptyMessage="No customers found"
+          rowKey="id"
+          onRowClick={(customer) => setHistoryCustomerId(customer.id)}
         />
       )}
 
@@ -341,9 +404,8 @@ export function CustomersPage() {
               </label>
               <Select
                 options={[
-                  { value: 'RETAIL', label: 'Retail' },
+                  { value: 'RETAIL', label: 'Regular Customer' },
                   { value: 'RESELLER', label: 'Reseller' },
-                  { value: 'CORPORATE', label: 'Corporate' },
                 ]}
                 value={formData.customerType}
                 onChange={(e) => setFormData({ ...formData, customerType: e.target.value as CustomerType })}
@@ -362,63 +424,26 @@ export function CustomersPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Phone *
-              </label>
-              <Input
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                placeholder="Enter phone number"
-                error={formErrors.phone}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Email
-              </label>
-              <Input
-                type="email"
-                value={formData.email ?? ''}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value || null })}
-                placeholder="Enter email address"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Company Name
-              </label>
-              <Input
-                value={formData.companyName ?? ''}
-                onChange={(e) => setFormData({ ...formData, companyName: e.target.value || null })}
-                placeholder="Enter company name (optional)"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                TIN
-              </label>
-              <Input
-                value={formData.tin ?? ''}
-                onChange={(e) => setFormData({ ...formData, tin: e.target.value || null })}
-                placeholder="Enter TIN (optional)"
-              />
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Phone *
+            </label>
+            <Input
+              value={formData.phone}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              placeholder="Enter phone number"
+              error={formErrors.phone}
+            />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Credit Limit
+              Address
             </label>
             <Input
-              type="number"
-              value={formData.creditLimit ?? ''}
-              onChange={(e) => setFormData({ ...formData, creditLimit: e.target.value ? Number(e.target.value) : undefined })}
-              placeholder="Enter credit limit"
+              value={formData.address}
+              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+              placeholder="Enter customer address"
             />
           </div>
 
@@ -449,13 +474,49 @@ export function CustomersPage() {
         }}
         title={
           historyCustomerId
-            ? `Purchase History — ${data?.data?.find((c) => c.id === historyCustomerId)?.fullName || 'Customer'}`
-            : 'Purchase History'
+            ? `Customer Profile — ${data?.data?.find((c) => c.id === historyCustomerId)?.fullName || 'Customer'}`
+            : 'Customer Profile'
         }
         size="lg"
       >
         {historyCustomerId && (
           <div className="space-y-4">
+            <div className="rounded-lg border border-primary-200 dark:border-primary-800 p-4 space-y-3">
+              <div><h3 className="font-semibold text-gray-900 dark:text-white">Record Gallons for this Customer</h3><p className="text-xs text-gray-500 dark:text-gray-300">Unpaid gallons enter circulation. Paid gallons are immediately recorded as sold.</p></div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div><label className="block text-sm font-medium mb-1">Inventory Item</label><Select options={(inventoryItems?.data ?? []).map((item) => ({ value: item.productId, label: `${item.productName} — ${item.quantityOnHand} at shop` }))} value={loanForm.productId} onChange={(event) => setLoanForm({ ...loanForm, productId: event.target.value })} placeholder="Select gallon/container" /></div>
+                <div><label className="block text-sm font-medium mb-1">Quantity</label><Input type="number" min="1" step="1" value={loanForm.quantity} onChange={(event) => setLoanForm({ ...loanForm, quantity: event.target.value })} /></div>
+                <div><label className="block text-sm font-medium mb-1">Payment Status</label><Select options={[{ value: 'UNPAID', label: 'Unpaid — Lent' }, { value: 'PAID', label: 'Paid — Sold' }]} value={loanForm.paymentStatus} onChange={(event) => setLoanForm({ ...loanForm, paymentStatus: event.target.value })} /></div>
+                {loanForm.paymentStatus === 'PAID' && <>
+                  <div><label className="block text-sm font-medium mb-1">Amount Paid</label><Input type="number" min="0.01" step="0.01" value={loanForm.amount} onChange={(event) => setLoanForm({ ...loanForm, amount: event.target.value })} /></div>
+                  <div><label className="block text-sm font-medium mb-1">Payment Method</label><Select options={[{ value: 'CASH', label: 'Cash' }, { value: 'GCASH', label: 'GCash' }, { value: 'MAYA', label: 'Maya' }, { value: 'BANK_TRANSFER', label: 'Bank Transfer' }]} value={loanForm.paymentMethod} onChange={(event) => setLoanForm({ ...loanForm, paymentMethod: event.target.value })} /></div>
+                </>}
+              </div>
+              {loanError && <p className="text-sm text-red-600 dark:text-red-400">{loanError}</p>}
+              <div className="flex justify-end"><Button className="w-full sm:w-auto" onClick={handleCreateLoan} loading={createLoanMutation.isPending}>Record Gallons</Button></div>
+            </div>
+            <div>
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Lent Gallons</h3>
+              <div className="space-y-2">
+                {inventoryLoans.filter((loan) => loan.customer_id === historyCustomerId).map((loan) => (
+                  <div key={loan.id} className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div><p className="font-medium">{loan.product.name} × {loan.quantity}</p><p className="text-xs text-gray-500 dark:text-gray-300">Lent {new Date(loan.lent_at).toLocaleDateString()} · {loan.status === 'OUTSTANDING' ? 'Unpaid / In Circulation' : loan.status === 'SOLD' ? 'Paid / Sold' : 'Returned'}</p></div>
+                    {isOwner && loan.status === 'OUTSTANDING' && <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                      <Button className="w-full whitespace-nowrap sm:w-auto" size="sm" variant="secondary" onClick={() => resolveLoanMutation.mutate({ id: loan.id, action: 'RETURN' })}>Record Return</Button>
+                      <Button className="w-full whitespace-nowrap sm:w-auto" size="sm" onClick={() => {
+                        const entered = window.prompt(`Enter total payment for ${loan.quantity} ${loan.product.name}:`)
+                        if (entered === null) return
+                        const amount = Number(entered)
+                        if (!Number.isFinite(amount) || amount <= 0) return addToast({ type: 'error', title: 'Enter a valid payment amount' })
+                        resolveLoanMutation.mutate({ id: loan.id, action: 'SOLD', amount })
+                      }}>Mark Paid / Sold</Button>
+                    </div>}
+                  </div>
+                ))}
+                {!inventoryLoans.some((loan) => loan.customer_id === historyCustomerId) && <p className="text-sm text-gray-500 dark:text-gray-300">No lent gallon records.</p>}
+              </div>
+            </div>
+            <h3 className="font-semibold text-gray-900 dark:text-white">Purchase History</h3>
             {historyLoading ? (
               <SkeletonTable rows={5} columns={6} />
             ) : (

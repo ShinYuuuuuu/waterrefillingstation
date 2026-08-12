@@ -31,6 +31,7 @@ export function SalesPage() {
   const canCreateSale = user?.role === 'cashier'
   const isOwner = user?.role === 'owner'
   const [reportPeriod, setReportPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily')
+  const [productFilter, setProductFilter] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [page, setPage] = useState(1)
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -60,13 +61,19 @@ export function SalesPage() {
   })
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['sales', searchQuery, page],
+    queryKey: ['sales', searchQuery, productFilter, page],
     queryFn: () =>
       salesService.list({
         search: searchQuery || undefined,
         page,
         limit: 20,
+        productId: productFilter || undefined,
       }),
+  })
+
+  const { data: salesProducts } = useQuery({
+    queryKey: ['products', 'sales-filter'],
+    queryFn: () => productService.list({ page: 1, limit: 100, isActive: true }),
   })
 
   const { data: incomeTrends, isLoading: trendsLoading } = useQuery({
@@ -191,6 +198,7 @@ export function SalesPage() {
     { key: 'customerName', header: 'Customer' },
     { key: 'cashierName', header: 'Cashier' },
     { key: 'channel', header: 'Sale Type', render: (item: Sale) => <Badge variant="info">{item.channel === 'IN_STORE' ? 'Walk-in' : 'Delivery'}</Badge> },
+    { key: 'items', header: 'Products Sold', render: (item: Sale) => <div className="space-y-1">{item.items.map((line) => <p key={line.id} className="text-sm">{line.productName} × {line.quantity}</p>)}</div> },
     { key: 'grandTotal', header: 'Total', render: (item: Sale) => `₱${item.grandTotal.toFixed(2)}` },
     { key: 'status', header: 'Status', render: (item: Sale) => <Badge variant={item.status === 'COMPLETED' ? 'success' : 'warning'}>{item.status}</Badge> },
     { key: 'createdAt', header: 'Date', render: (item: Sale) => new Date(item.createdAt).toLocaleDateString() },
@@ -272,16 +280,18 @@ export function SalesPage() {
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Sales Tracking</h2>
               <p className="text-sm text-gray-500">Compare completed sales by day, week, or month.</p>
             </div>
-            <Select
-              className="sm:w-44"
-              options={[
-                { value: 'daily', label: 'Daily — 7 days' },
-                { value: 'weekly', label: 'Weekly — 8 weeks' },
-                { value: 'monthly', label: 'Monthly — 12 months' },
-              ]}
-              value={reportPeriod}
-              onChange={(event) => setReportPeriod(event.target.value as 'daily' | 'weekly' | 'monthly')}
-            />
+            <div className="w-full sm:w-52">
+              <Select
+                aria-label="Sales report period"
+                options={[
+                  { value: 'daily', label: 'Daily — 7 days' },
+                  { value: 'weekly', label: 'Weekly — 8 weeks' },
+                  { value: 'monthly', label: 'Monthly — 12 months' },
+                ]}
+                value={reportPeriod}
+                onChange={(event) => setReportPeriod(event.target.value as 'daily' | 'weekly' | 'monthly')}
+              />
+            </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Card><CardContent><p className="text-sm text-gray-500">Period Revenue</p><p className="mt-1 text-2xl font-bold">₱{reportSummary.revenue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p></CardContent></Card>
@@ -311,6 +321,16 @@ export function SalesPage() {
           </Card>
         </div>
       )}
+      <div className="mb-4 flex flex-col gap-1 sm:ml-auto sm:w-72">
+        <label htmlFor="sales-product-filter" className="text-sm font-medium text-gray-700 dark:text-gray-200">Filter by product or service</label>
+        <Select
+          id="sales-product-filter"
+          className="truncate"
+          options={[{ value: '', label: 'All products and services' }, ...(salesProducts?.data ?? []).map((product) => ({ value: product.id, label: product.name }))]}
+          value={productFilter}
+          onChange={(event) => { setProductFilter(event.target.value); setPage(1) }}
+        />
+      </div>
       {sales.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">

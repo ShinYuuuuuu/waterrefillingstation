@@ -58,6 +58,9 @@ export class SaleRepository {
     if (query.customerId) {
       where.customer_id = query.customerId
     }
+    if (query.productId) {
+      where.items = { some: { product_id: query.productId, deleted_at: null } }
+    }
     if (query.startDate || query.endDate) {
       const dateFilter: Record<string, unknown> = {}
       if (query.startDate) dateFilter.gte = new Date(query.startDate)

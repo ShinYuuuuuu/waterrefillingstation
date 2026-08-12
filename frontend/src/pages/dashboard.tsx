@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { PageLayout } from '@/layouts/page-layout'
@@ -5,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { StatCard } from '@/components/ui/stat-card'
 import { SkeletonCard, SkeletonTable } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
+import { Select } from '@/components/ui/select'
 import { customerService } from '@/services/customer.service'
 import { productService } from '@/services/product.service'
 import { salesService } from '@/services/sales.service'
@@ -23,14 +25,14 @@ function IncomeChart({ title, subtitle, data }: { title: string; subtitle: strin
   const maximum = Math.max(...data.map((point) => point.total), 1)
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
+      <CardHeader className="mb-2 sm:mb-4">
+        <CardTitle className="text-base sm:text-lg">{title}</CardTitle>
         <p className="text-xs text-gray-500 mt-1">{subtitle}</p>
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto pb-1">
           <div className={data.length > 8 ? 'min-w-[38rem]' : 'min-w-[24rem]'}>
-            <div className="h-52 flex items-end gap-2 border-b border-gray-200 dark:border-gray-700 pt-6">
+            <div className="h-36 sm:h-52 flex items-end gap-2 border-b border-gray-200 dark:border-gray-700 pt-6">
               {data.map((point) => (
                 <div key={point.label} className="group flex-1 h-full flex flex-col justify-end items-center min-w-0">
                   <div className="text-[10px] font-semibold mb-1 whitespace-nowrap text-gray-700 dark:text-gray-300">
@@ -55,6 +57,7 @@ function IncomeChart({ title, subtitle, data }: { title: string; subtitle: strin
 }
 
 export function DashboardPage() {
+  const [salesPeriod, setSalesPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily')
   const today = new Date().toISOString().slice(0, 10)
   const customers = useQuery({ queryKey: ['dashboard', 'customers'], queryFn: () => customerService.list({ page: 1, limit: 1 }) })
   const products = useQuery({ queryKey: ['dashboard', 'products'], queryFn: () => productService.list({ page: 1, limit: 1, isActive: true }) })
@@ -70,6 +73,12 @@ export function DashboardPage() {
     { title: 'Products & Services', href: '/products', value: String(products.data?.meta.total ?? 0), description: 'Active catalog entries', trend: 'neutral' as const, trendValue: '', icon: <FiPackage className="w-6 h-6" /> },
     { title: 'Inventory', href: '/inventory', value: String(lowStock.data?.length ?? 0), description: 'Items needing attention', trend: (lowStock.data?.length ? 'down' : 'neutral') as 'down' | 'neutral', trendValue: '', icon: <FiAlertTriangle className="w-6 h-6" /> },
   ]
+  const chartOptions = {
+    daily: { title: 'Daily Sales', subtitle: 'Income for the last 7 days', data: trends.data?.daily ?? [] },
+    weekly: { title: 'Weekly Sales', subtitle: 'Income for the last 8 weeks', data: trends.data?.weekly ?? [] },
+    monthly: { title: 'Monthly Sales', subtitle: 'Compare income across the last 12 months', data: trends.data?.monthly ?? [] },
+  }
+  const selectedChart = chartOptions[salesPeriod]
 
   if (isLoading) {
     return <PageLayout title="Dashboard" breadcrumbItems={[{ label: 'Dashboard' }]}><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">{Array.from({ length: 4 }).map((_, index) => <SkeletonCard key={index} />)}</div><div className="mt-6"><SkeletonTable rows={5} columns={4} /></div></PageLayout>
@@ -77,23 +86,33 @@ export function DashboardPage() {
 
   return (
     <PageLayout title="Dashboard" breadcrumbItems={[{ label: 'Dashboard' }]}>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
         {stats.map(({ href, ...stat }) => (
           <Link key={stat.title} to={href} className="rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500">
-            <StatCard {...stat} className="h-full cursor-pointer transition-all hover:-translate-y-0.5 hover:border-primary-400 hover:shadow-md" />
+            <StatCard {...stat} compactOnMobile className="h-full min-h-24 cursor-pointer transition-all hover:-translate-y-0.5 hover:border-primary-400 hover:shadow-md sm:min-h-0" />
           </Link>
         ))}
       </div>
-      <div className="mt-6 grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <IncomeChart title="Daily Sales" subtitle="Income for the last 7 days" data={trends.data?.daily ?? []} />
-        <IncomeChart title="Weekly Sales" subtitle="Income for the last 8 weeks" data={trends.data?.weekly ?? []} />
-        <div className="xl:col-span-2">
-          <IncomeChart title="Monthly Sales" subtitle="Compare income across the last 12 months" data={trends.data?.monthly ?? []} />
+      <div className="mt-4 space-y-2 sm:mt-6 sm:space-y-3">
+        <div className="flex flex-col gap-1 sm:ml-auto sm:w-56 sm:gap-2">
+          <label htmlFor="dashboard-sales-period" className="text-sm font-medium text-gray-700 dark:text-gray-200">View sales by</label>
+          <Select
+            id="dashboard-sales-period"
+            aria-label="View dashboard sales by period"
+            options={[
+              { value: 'daily', label: 'Daily' },
+              { value: 'weekly', label: 'Weekly' },
+              { value: 'monthly', label: 'Monthly' },
+            ]}
+            value={salesPeriod}
+            onChange={(event) => setSalesPeriod(event.target.value as typeof salesPeriod)}
+          />
         </div>
+        <IncomeChart title={selectedChart.title} subtitle={selectedChart.subtitle} data={selectedChart.data} />
       </div>
-      <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-3 sm:mt-6 sm:gap-4">
         <Card>
-          <CardHeader><CardTitle>Recent Sales</CardTitle></CardHeader>
+          <CardHeader className="mb-2 sm:mb-4"><CardTitle className="text-base sm:text-lg">Recent Sales</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {(recentSales.data?.data ?? []).length === 0 ? <p className="text-sm text-gray-500">No sales recorded yet.</p> : recentSales.data?.data.map((sale) => (
               <div key={sale.id} className="flex items-center justify-between gap-3 border-b border-gray-100 pb-3 last:border-0">
@@ -104,7 +123,7 @@ export function DashboardPage() {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader><CardTitle>Low Inventory</CardTitle></CardHeader>
+          <CardHeader className="mb-2 sm:mb-4"><CardTitle className="text-base sm:text-lg">Low Inventory</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {(lowStock.data ?? []).length === 0 ? <p className="text-sm text-green-600">All inventory is above its reorder level.</p> : lowStock.data?.map((item) => (
               <div key={`${item.branchId}-${item.productId}`} className="flex items-center justify-between rounded-lg bg-yellow-50 dark:bg-yellow-900/20 p-3">

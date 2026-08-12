@@ -22,7 +22,7 @@ import type {
   StockCountSession,
   InventoryUpdateRequest,
 } from '@/types/inventory'
-import { FiEdit, FiFileText, FiCheckCircle, FiAlertTriangle, FiRefreshCw, FiPlus, FiTrash2 } from 'react-icons/fi'
+import { FiFileText, FiCheckCircle, FiAlertTriangle, FiPlus, FiTrash2 } from 'react-icons/fi'
 
 export function InventoryPage() {
   const queryClient = useQueryClient()
@@ -63,19 +63,10 @@ export function InventoryPage() {
     enabled: isOwner,
   })
 
-  const { data: inventoryLoans = [] } = useQuery({
-    queryKey: ['inventory', 'loans'],
-    queryFn: () => inventoryService.listInventoryLoans(),
-    enabled: isOwner,
-  })
-
+  const { data: inventoryLoans = [] } = useQuery({ queryKey: ['inventory', 'loans'], queryFn: () => inventoryService.listInventoryLoans(), enabled: isOwner })
   const resolveLoanMutation = useMutation({
-    mutationFn: ({ id, action, amount }: { id: string; action: 'RETURN' | 'SOLD'; amount?: number }) =>
-      action === 'RETURN' ? inventoryService.returnInventoryLoan(id) : inventoryService.sellInventoryLoan(id, amount!, 'CASH'),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['inventory'] })
-      addToast({ type: 'success', title: 'Circulation record updated' })
-    },
+    mutationFn: ({ id, action, amount }: { id: string; action: 'RETURN' | 'SOLD'; amount?: number }) => action === 'RETURN' ? inventoryService.returnInventoryLoan(id) : inventoryService.sellInventoryLoan(id, amount!, 'CASH'),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['inventory'] }); addToast({ type: 'success', title: 'Circulation record updated' }) },
     onError: (err: any) => addToast({ type: 'error', title: err?.response?.data?.error?.message || 'Failed to update circulation record' }),
   })
 
@@ -357,6 +348,24 @@ export function InventoryPage() {
     })
   }
 
+  const openInventoryItem = (item: InventoryItem) => {
+    setSelectedItem(item)
+    if (isOwner) {
+      setEditInventoryForm({
+        itemName: item.productName,
+        sku: item.productSku,
+        quantityOnHand: String(item.quantityOnHand),
+        reorderLevel: String(item.reorderLevel),
+      })
+      setAdjustError('')
+      setIsAdjustOpen(true)
+      return
+    }
+    setUpdateCountForm({ quantity: String(item.quantityOnHand), notes: '' })
+    setUpdateCountError('')
+    setIsUpdateCountOpen(true)
+  }
+
   const handleApprove = (request: InventoryUpdateRequest) => {
     const approvedQuantity = request.approvedQuantity ?? request.requestedQuantity
     approveMutation.mutate({ requestId: request.id, approvedQuantity, notes: request.notes })
@@ -414,38 +423,7 @@ export function InventoryPage() {
         </span>
       ),
     },
-    {
-      key: 'actions',
-      header: 'Actions',
-      render: (item: InventoryItem) => {
-        const isLowStock = item.availableQuantity <= item.reorderLevel
-        return (
-          <div className="flex items-center gap-2">
-            {isOwner && (
-              <Button variant="ghost" size="sm" onClick={() => { setSelectedItem(item); setIsAdjustOpen(true); setEditInventoryForm({ itemName: item.productName, sku: item.productSku, quantityOnHand: String(item.quantityOnHand), reorderLevel: String(item.reorderLevel) }); setAdjustError(''); }}>
-                <FiEdit className="w-4 h-4" />
-              </Button>
-            )}
-            <Button variant="ghost" size="sm" onClick={() => { setSelectedItem(item); setIsHistoryOpen(true); refetchHistory(); }} title="View stock movement history">
-              <FiFileText className="w-4 h-4" />
-            </Button>
-            {!isOwner && (
-              <>
-                <Button variant="ghost" size="sm" onClick={() => { setSelectedItem(item); setIsUpdateCountOpen(true); setUpdateCountForm({ quantity: '', notes: '' }); setUpdateCountError(''); }}>
-                  <FiRefreshCw className="w-4 h-4" />
-                </Button>
-                {isLowStock && (
-                  <Button variant="ghost" size="sm" onClick={() => { setSelectedItem(item); setIsStillLowOpen(true); }}>
-                    <FiAlertTriangle className="w-4 h-4 text-yellow-600" />
-                  </Button>
-                )}
-              </>
-            )}
-          </div>
-        )
-      },
-    },
-  ], [isOwner, refetchHistory])
+  ], [])
 
   const items = data?.data ?? []
   const pagination = data?.meta
@@ -577,6 +555,7 @@ export function InventoryPage() {
           onSearchChange={setSearchQuery}
           searchPlaceholder="Search inventory..."
           emptyMessage="No inventory items found"
+          onRowClick={openInventoryItem}
         />
       )}
 
@@ -703,9 +682,14 @@ export function InventoryPage() {
               </div>
             </div>
             <div className="flex flex-col-reverse sm:flex-row sm:justify-between gap-3 pt-4">
-              <Button variant="danger" onClick={() => setIsDeleteInventoryOpen(true)} disabled={editInventoryMutation.isPending}>
-                <FiTrash2 className="w-4 h-4 mr-2" /> Delete Item
-              </Button>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button variant="danger" onClick={() => setIsDeleteInventoryOpen(true)} disabled={editInventoryMutation.isPending}>
+                  <FiTrash2 className="w-4 h-4 mr-2" /> Delete Item
+                </Button>
+                <Button variant="secondary" onClick={() => { setIsAdjustOpen(false); setIsHistoryOpen(true); refetchHistory(); }}>
+                  <FiFileText className="w-4 h-4 mr-2" /> View History
+                </Button>
+              </div>
               <div className="flex justify-end gap-3">
               <Button variant="secondary" onClick={() => { setIsAdjustOpen(false); setSelectedItem(null); }} disabled={editInventoryMutation.isPending}>
                 Cancel
@@ -835,13 +819,25 @@ export function InventoryPage() {
                 placeholder="Optional notes"
               />
             </div>
-            <div className="flex justify-end gap-3 pt-4">
+            <div className="flex flex-col-reverse gap-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button variant="secondary" onClick={() => { setIsUpdateCountOpen(false); setIsHistoryOpen(true); refetchHistory(); }}>
+                  <FiFileText className="w-4 h-4 mr-2" /> View History
+                </Button>
+                {selectedItem.availableQuantity <= selectedItem.reorderLevel && (
+                  <Button variant="secondary" onClick={() => { setIsUpdateCountOpen(false); setIsStillLowOpen(true) }}>
+                    <FiAlertTriangle className="w-4 h-4 mr-2 text-yellow-600" /> Report Low Stock
+                  </Button>
+                )}
+              </div>
+              <div className="flex flex-col-reverse gap-3 sm:flex-row">
               <Button variant="secondary" onClick={() => { setIsUpdateCountOpen(false); setSelectedItem(null); }} disabled={updateCountMutation.isPending}>
                 Cancel
               </Button>
               <Button onClick={handleUpdateCount} loading={updateCountMutation.isPending}>
                 Save Count
               </Button>
+              </div>
             </div>
           </div>
         )}

@@ -88,6 +88,7 @@ export interface SaleListQuery {
   startDate?: string
   endDate?: string
   search?: string
+  productId?: string
 }
 
 export interface SaleListResponse {

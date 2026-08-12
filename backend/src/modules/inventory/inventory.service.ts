@@ -135,6 +135,53 @@ export class InventoryService {
     })
   }
 
+  async createInventoryLoan(data: { customerId: string; productId: string; quantity: number; paid: boolean; amount?: number; paymentMethod: 'CASH' | 'GCASH' | 'MAYA' | 'BANK_TRANSFER' }, ctx: InventoryContext) {
+    const [customer, inventory] = await Promise.all([
+      prisma.customer.findFirst({ where: { id: data.customerId, tenant_id: ctx.tenantId, deleted_at: null } }),
+      prisma.branchInventory.findFirst({
+        where: { tenant_id: ctx.tenantId, ...(ctx.branchId ? { branch_id: ctx.branchId } : {}), product_id: data.productId, deleted_at: null },
+        include: { product: true },
+      }),
+    ])
+    if (!customer) throw new NotFoundError('Customer')
+    if (!inventory) throw new NotFoundError('Inventory item')
+    if (inventory.quantity_on_hand < data.quantity) throw new AppError(httpStatus.BAD_REQUEST, `Only ${inventory.quantity_on_hand} available at the shop`)
+
+    let paidSaleId: string | null = null
+    if (data.paid) {
+      const amount = data.amount!
+      const sale = await saleRepository.create({
+        customerId: customer.id,
+        channel: 'IN_STORE',
+        items: [{ productId: inventory.product_id, productName: inventory.product.name, quantity: data.quantity, unitPrice: amount / data.quantity }],
+        payments: [{ amount, method: data.paymentMethod }],
+        notes: 'Paid gallon/container issued from customer profile',
+      }, { tenantId: ctx.tenantId, branchId: inventory.branch_id, userId: ctx.userId })
+      paidSaleId = sale.id
+    }
+
+    return prisma.$transaction(async (tx: any) => {
+      await tx.branchInventory.update({ where: { id: inventory.id }, data: { quantity_on_hand: { decrement: data.quantity }, updated_at: new Date() } })
+      const loan = await tx.inventoryLoan.create({
+        data: {
+          tenant_id: ctx.tenantId, branch_id: inventory.branch_id, product_id: inventory.product_id,
+          customer_id: customer.id, sale_id: paidSaleId, quantity: data.quantity,
+          status: data.paid ? 'SOLD' : 'OUTSTANDING', resolved_at: data.paid ? new Date() : null, created_by: ctx.userId,
+        },
+      })
+      await tx.inventoryLedger.create({
+        data: {
+          tenant_id: ctx.tenantId, branch_id: inventory.branch_id, product_id: inventory.product_id,
+          movement_type: data.paid ? 'SALE' : 'TRANSFER_OUT', quantity_delta: -data.quantity,
+          reference_type: 'INVENTORY_LOAN', reference_id: loan.id,
+          notes: data.paid ? `Paid gallon issued to ${customer.full_name}` : `Lent to ${customer.full_name}`,
+          created_by: ctx.userId,
+        },
+      })
+      return loan
+    })
+  }
+
   async resolveInventoryLoan(id: string, action: 'RETURN' | 'SOLD', ctx: InventoryContext, payment?: { amount: number; paymentMethod: 'CASH' | 'GCASH' | 'MAYA' | 'BANK_TRANSFER' }) {
     const loan = await prisma.inventoryLoan.findFirst({
       where: { id, tenant_id: ctx.tenantId, ...(ctx.branchId ? { branch_id: ctx.branchId } : {}), status: 'OUTSTANDING' },

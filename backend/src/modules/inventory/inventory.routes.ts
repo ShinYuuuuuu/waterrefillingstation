@@ -29,6 +29,7 @@ import {
   reviewInventoryUpdateRequestSchema,
   inventoryLoanIdSchema,
   sellInventoryLoanSchema,
+  createInventoryLoanSchema,
 } from './inventory.schema'
 
 /**
@@ -43,6 +44,7 @@ export const inventoryRoutes = Router()
 inventoryRoutes.use(authenticateToken)
 
 inventoryRoutes.get('/loans', requirePermission(InventoryPermission.READ), inventoryController.listInventoryLoans)
+inventoryRoutes.post('/loans', requirePermission(InventoryPermission.UPDATE), validateRequest(createInventoryLoanSchema), inventoryController.createInventoryLoan)
 inventoryRoutes.post('/loans/:loanId/return', requirePermission(InventoryPermission.UPDATE), validateRequest(inventoryLoanIdSchema), inventoryController.returnInventoryLoan)
 inventoryRoutes.post('/loans/:loanId/sell', requirePermission(InventoryPermission.UPDATE), validateRequest(sellInventoryLoanSchema), inventoryController.sellInventoryLoan)
 

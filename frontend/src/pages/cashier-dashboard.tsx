@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { PageLayout } from '@/layouts/page-layout'
 import { Card, CardContent } from '@/components/ui/card'
@@ -35,6 +36,7 @@ const PAYMENT_METHODS = [
 ]
 
 export function CashierDashboard() {
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { addToast } = useToast()
   const { user } = useAuthContext()
@@ -56,8 +58,6 @@ export function CashierDashboard() {
   const [saleError, setSaleError] = useState('')
   const [customerReward, setCustomerReward] = useState<{ balance: number; type: string; progress: number } | null>(null)
   const [redeemFreeGallons, setRedeemFreeGallons] = useState('0')
-  const [lentInventoryProductId, setLentInventoryProductId] = useState('')
-  const [lentInventoryQuantity, setLentInventoryQuantity] = useState('0')
 
   const customerDropdownRef = useRef<HTMLDivElement>(null)
 
@@ -109,6 +109,12 @@ export function CashierDashboard() {
     enabled: isSaleOpen,
   })
 
+  const { data: recentProductSales } = useQuery({
+    queryKey: ['sales', 'recent-product-order'],
+    queryFn: () => salesService.list({ page: 1, limit: 100 }),
+    enabled: isSaleOpen,
+  })
+
   const customers = customersData?.data ?? []
   const allActiveProducts = allProducts?.data ?? []
 
@@ -121,6 +127,7 @@ export function CashierDashboard() {
 
     setSelectedCustomerId(exactMatch.id)
     setCustomerPhone(exactMatch.phone)
+    setCustomerAddress(typeof exactMatch.metadata?.address === 'string' ? exactMatch.metadata.address : '')
     setCustomerReward({
       balance: exactMatch.freeGallonsBalance,
       type: exactMatch.customerType,
@@ -129,8 +136,15 @@ export function CashierDashboard() {
     setRedeemFreeGallons('0')
   }, [customers, customerName, selectedCustomerId])
 
-  const refillProducts = allActiveProducts.filter((product) => product.isForSale)
-  const lendableProducts = allActiveProducts.filter((product) => product.isStockTracked)
+  const recentProductOrder = new Map<string, number>()
+  recentProductSales?.data.forEach((sale) => sale.items.forEach((item) => {
+    if (!recentProductOrder.has(item.productId)) recentProductOrder.set(item.productId, recentProductOrder.size)
+  }))
+  const refillProducts = allActiveProducts.filter((product) => product.isForSale).sort((a, b) => {
+    const aOrder = recentProductOrder.get(a.id) ?? Number.MAX_SAFE_INTEGER
+    const bOrder = recentProductOrder.get(b.id) ?? Number.MAX_SAFE_INTEGER
+    return aOrder - bOrder || a.name.localeCompare(b.name)
+  })
   const refillProduct = refillProducts.find((product) => product.id === selectedProductId) ?? refillProducts[0] ?? null
   const refillPrice = Number(refillProduct?.basePrice ?? 0)
   const unitPrice = refillPrice
@@ -182,8 +196,6 @@ export function CashierDashboard() {
     setSaleError('')
     setCustomerReward(null)
     setRedeemFreeGallons('0')
-    setLentInventoryProductId('')
-    setLentInventoryQuantity('0')
   }
 
   const handleSaveSale = async () => {
@@ -210,6 +222,10 @@ export function CashierDashboard() {
     const trimmedName = customerName.trim()
 
     if (trimmedName && !customerId) {
+      if (!customerPhone.trim()) {
+        setSaleError('Phone number is required when adding a new customer')
+        return
+      }
       // Search for existing customer by exact case-insensitive name match
       const searchResult = await customerService.list({ search: trimmedName, limit: 10 })
       const exactMatch = searchResult.data.find((c) => c.fullName.toLowerCase() === trimmedName.toLowerCase())
@@ -222,8 +238,9 @@ export function CashierDashboard() {
         try {
           const newCustomer = await customerService.create({
             fullName: trimmedName,
-            phone: customerPhone.trim() || `N/A-${Date.now()}`,
+            phone: customerPhone.trim(),
             customerType: newCustomerType,
+            metadata: customerAddress.trim() ? { address: customerAddress.trim() } : undefined,
           })
           customerId = newCustomer.id
           setSelectedCustomerId(newCustomer.id)
@@ -236,10 +253,6 @@ export function CashierDashboard() {
 
     if (saleType === 'DELIVERY' && !customerId) {
       setSaleError('Customer name is required for delivery')
-      return
-    }
-    if (Number(lentInventoryQuantity) > 0 && !customerId) {
-      setSaleError('Select or create a customer before lending inventory')
       return
     }
 
@@ -262,8 +275,6 @@ export function CashierDashboard() {
       ],
       notes: saleType === 'DELIVERY' ? customerAddress.trim() || null : null,
       redeemFreeGallons: rewardGallons,
-      lentInventoryProductId: Number(lentInventoryQuantity) > 0 ? lentInventoryProductId : null,
-      lentInventoryQuantity: Number(lentInventoryQuantity) || 0,
     })
   }
 
@@ -287,20 +298,20 @@ export function CashierDashboard() {
   return (
     <PageLayout title="Cashier Dashboard" breadcrumbItems={[{ label: 'Dashboard' }]}>
       {/* Primary Actions */}
-      <div className="grid grid-cols-1 gap-4 mb-6">
+      <div className="grid grid-cols-1 gap-3 mb-4 sm:gap-4 sm:mb-6">
         <div
           className="cursor-pointer hover:shadow-lg transition-shadow border-2 border-primary-200 dark:border-primary-800 rounded-xl"
           onClick={() => setIsSaleOpen(true)}
         >
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 rounded-full bg-primary-100 dark:bg-primary-900/30">
-                  <FiShoppingCart className="w-8 h-8 text-primary-600 dark:text-primary-400" />
+          <Card padding="none">
+            <CardContent className="p-3 sm:p-6">
+              <div className="flex items-center gap-3 sm:gap-4">
+                <div className="p-2 sm:p-3 rounded-full bg-primary-100 dark:bg-primary-900/30">
+                  <FiShoppingCart className="w-6 h-6 sm:w-8 sm:h-8 text-primary-600 dark:text-primary-400" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">New Sale</h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Start a walk-in or delivery transaction</p>
+                  <h3 className="text-base sm:text-xl font-bold text-gray-900 dark:text-white">New Sale</h3>
+                  <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Start a walk-in or delivery transaction</p>
                 </div>
               </div>
             </CardContent>
@@ -309,63 +320,63 @@ export function CashierDashboard() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-6">
+        <Card padding="none" className="cursor-pointer hover:border-primary-400 hover:shadow-md" >
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center justify-between" onClick={() => navigate('/sales?period=today')} role="link" tabIndex={0}>
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Today's Sales</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                <p className="text-xs sm:text-sm leading-tight text-gray-500 dark:text-gray-400">Today's Sales</p>
+                <p className="mt-1 text-lg sm:text-2xl font-bold leading-tight break-all text-gray-900 dark:text-white">
                   ₱{todaySales?.data?.reduce((sum, s) => sum + s.grandTotal, 0).toFixed(2) ?? '0.00'}
                 </p>
               </div>
-              <FiDollarSign className="w-8 h-8 text-green-500" />
+              <FiDollarSign className="hidden sm:block w-8 h-8 text-green-500" />
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
+        <Card padding="none" className="cursor-pointer hover:border-primary-400 hover:shadow-md">
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center justify-between" onClick={() => navigate('/sales')} role="link" tabIndex={0}>
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Transactions</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{recentSales.length}</p>
+                <p className="text-xs sm:text-sm leading-tight text-gray-500 dark:text-gray-400">Transactions</p>
+                <p className="mt-1 text-lg sm:text-2xl font-bold leading-tight text-gray-900 dark:text-white">{recentSales.length}</p>
               </div>
-              <FiClipboard className="w-8 h-8 text-blue-500" />
+              <FiClipboard className="hidden sm:block w-8 h-8 text-blue-500" />
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
+        <Card padding="none" className="cursor-pointer hover:border-primary-400 hover:shadow-md">
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center justify-between" onClick={() => navigate('/deliveries?status=PENDING')} role="link" tabIndex={0}>
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Pending Deliveries</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{pendingDeliveriesList.length}</p>
+                <p className="text-xs sm:text-sm leading-tight text-gray-500 dark:text-gray-400">Pending Deliveries</p>
+                <p className="mt-1 text-lg sm:text-2xl font-bold leading-tight text-gray-900 dark:text-white">{pendingDeliveriesList.length}</p>
               </div>
-              <FiTruck className="w-8 h-8 text-yellow-500" />
+              <FiTruck className="hidden sm:block w-8 h-8 text-yellow-500" />
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
+        <Card padding="none" className="cursor-pointer hover:border-primary-400 hover:shadow-md">
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center justify-between" onClick={() => navigate('/inventory?filter=low')} role="link" tabIndex={0}>
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Low Stock Items</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{lowStockAlerts?.length ?? 0}</p>
+                <p className="text-xs sm:text-sm leading-tight text-gray-500 dark:text-gray-400">Low Stock Items</p>
+                <p className="mt-1 text-lg sm:text-2xl font-bold leading-tight text-gray-900 dark:text-white">{lowStockAlerts?.length ?? 0}</p>
               </div>
-              <FiAlertTriangle className="w-8 h-8 text-red-500" />
+              <FiAlertTriangle className="hidden sm:block w-8 h-8 text-red-500" />
             </div>
           </CardContent>
         </Card>
       </div>
 
       {/* Recent Transactions & Low Stock */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardContent className="p-4">
-            <h3 className="text-lg font-semibold mb-4">Recent Transactions</h3>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-6">
+        <Card padding="none">
+          <CardContent className="p-3 sm:p-4">
+            <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">Recent Transactions</h3>
             {salesLoading ? (
               <SkeletonTable rows={5} columns={4} />
             ) : recentSales.length === 0 ? (
@@ -387,8 +398,8 @@ export function CashierDashboard() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="p-4">
+        <Card padding="none">
+          <CardContent className="p-3 sm:p-4">
             <h3 className="text-lg font-semibold mb-4">Low Stock Warning</h3>
             {lowStockAlerts && lowStockAlerts.length > 0 ? (
               <div className="space-y-2 max-h-96 overflow-y-auto">
@@ -494,6 +505,7 @@ export function CashierDashboard() {
                   setCustomerName(customer.fullName)
                   setCustomerSearch('')
                   setCustomerPhone(customer.phone)
+                  setCustomerAddress(typeof customer.metadata?.address === 'string' ? customer.metadata.address : '')
                   setCustomerReward({ balance: customer.freeGallonsBalance, type: customer.customerType, progress: customer.rewardGallonProgress })
                   setRedeemFreeGallons('0')
                     }}
@@ -511,8 +523,8 @@ export function CashierDashboard() {
 
           {customerName.trim() && !selectedCustomerId && !customersLoading && (
             <div className="rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50 p-3">
-              <p className="text-sm font-medium text-gray-900 dark:text-white mb-2">New customer</p>
-              <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Customer type</label>
+              <p className="text-sm font-medium text-gray-900 dark:text-white mb-2">Add New Customer</p>
+              <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Customer Type</label>
               <Select
                 options={[
                   { value: 'RETAIL', label: 'Regular Customer' },
@@ -590,10 +602,10 @@ export function CashierDashboard() {
             </div>
           )}
 
-          {saleType === 'DELIVERY' && (
+          {(saleType === 'DELIVERY' || (customerName.trim() && !selectedCustomerId)) && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Phone</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Phone *</label>
                 <Input
                   value={customerPhone}
                   onChange={(e) => setCustomerPhone(e.target.value)}
@@ -605,40 +617,11 @@ export function CashierDashboard() {
                 <Input
                   value={customerAddress}
                   onChange={(e) => setCustomerAddress(e.target.value)}
-                  placeholder="Delivery address"
+                  placeholder="Customer address"
                 />
               </div>
             </div>
           )}
-
-          <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-3">
-            <div>
-              <p className="text-sm font-medium text-gray-900 dark:text-white">Inventory lent to customer</p>
-              <p className="text-xs text-gray-500">Optional. This moves returnable stock from At Shop to In Circulation as unpaid.</p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Item</label>
-                <Select
-                  options={lendableProducts.map((product) => ({ value: product.id, label: product.name }))}
-                  value={lentInventoryProductId}
-                  onChange={(event) => setLentInventoryProductId(event.target.value)}
-                  placeholder="No item lent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Quantity lent</label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={lentInventoryQuantity}
-                  onChange={(event) => setLentInventoryQuantity(event.target.value)}
-                  disabled={!lentInventoryProductId}
-                />
-              </div>
-            </div>
-          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>

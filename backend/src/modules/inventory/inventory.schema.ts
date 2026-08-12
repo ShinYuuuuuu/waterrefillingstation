@@ -5,6 +5,16 @@ export const sellInventoryLoanSchema = z.object({
   params: z.object({ loanId: z.string().uuid() }),
   body: z.object({ amount: z.number().positive(), paymentMethod: z.enum(['CASH', 'GCASH', 'MAYA', 'BANK_TRANSFER']) }),
 })
+export const createInventoryLoanSchema = z.object({
+  body: z.object({
+    customerId: z.string().uuid(),
+    productId: z.string().uuid(),
+    quantity: z.number().int().positive(),
+    paid: z.boolean().default(false),
+    amount: z.number().positive().optional(),
+    paymentMethod: z.enum(['CASH', 'GCASH', 'MAYA', 'BANK_TRANSFER']).optional().default('CASH'),
+  }).refine((data) => !data.paid || data.amount !== undefined, { message: 'Payment amount is required for paid gallons', path: ['amount'] }),
+})
 import { AdjustmentReason, MovementType, StockTransferStatus, StockCountStatus, ProductionBatchStatus } from './inventory.types'
 
 /**

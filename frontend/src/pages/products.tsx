@@ -10,7 +10,7 @@ import { Modal } from '@/components/ui/modal'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
-import { FiPlus, FiEdit, FiTrash2 } from 'react-icons/fi'
+import { FiPlus, FiTrash2 } from 'react-icons/fi'
 import { productService } from '@/services/product.service'
 import type { Product, ProductType, CreateProductRequest, UpdateProductRequest } from '@/types/product'
 import { useToast } from '@/components/ui/toast'
@@ -121,6 +121,9 @@ export function ProductsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] })
       setDeleteTargetId(null)
+      setIsFormOpen(false)
+      setEditingProduct(null)
+      resetForm()
       addToast({ type: 'success', title: 'Product deleted successfully' })
     },
     onError: (err: any) => {
@@ -133,6 +136,9 @@ export function ProductsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] })
       setArchiveTargetId(null)
+      setIsFormOpen(false)
+      setEditingProduct(null)
+      resetForm()
       addToast({ type: 'success', title: 'Product archived successfully' })
     },
     onError: (err: any) => {
@@ -145,6 +151,9 @@ export function ProductsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] })
       setReactivateTargetId(null)
+      setIsFormOpen(false)
+      setEditingProduct(null)
+      resetForm()
       addToast({ type: 'success', title: 'Product reactivated successfully' })
     },
     onError: (err: any) => {
@@ -308,46 +317,6 @@ export function ProductsPage() {
         </Badge>
       ),
     },
-    {
-      key: 'actions',
-      header: 'Actions',
-      render: (item: Product) => (
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => openEditForm(item)}>
-            <FiEdit className="w-4 h-4" />
-          </Button>
-          {item.isActive ? (
-            <>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleDeleteClick(item)}
-                title="Delete product"
-              >
-                <FiTrash2 className="w-4 h-4 text-red-600" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setArchiveTargetId(item.id)}
-                title="Archive product"
-              >
-                Archive
-              </Button>
-            </>
-          ) : (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setReactivateTargetId(item.id)}
-              title="Reactivate product"
-            >
-              Reactivate
-            </Button>
-          )}
-        </div>
-      ),
-    },
   ]
 
   const pagination = data?.meta
@@ -448,6 +417,8 @@ export function ProductsPage() {
           onSearchChange={setSearchQuery}
           searchPlaceholder="Search products..."
           emptyMessage="No products found"
+          rowKey="id"
+          onRowClick={openEditForm}
         />
       )}
 
@@ -605,8 +576,23 @@ export function ProductsPage() {
             />
           </div>
 
-          <div className="flex justify-end gap-3 pt-4">
+          <div className="flex flex-col-reverse gap-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
+            {editingProduct && (
+              <div className="flex flex-col gap-2 sm:flex-row">
+                {editingProduct.isActive ? (
+                  <Button className="w-full sm:w-auto" variant="danger" onClick={() => handleDeleteClick(editingProduct)} disabled={isSubmitting || isDeleting}>
+                    <FiTrash2 className="w-4 h-4 mr-2" /> Delete or Archive
+                  </Button>
+                ) : (
+                  <Button className="w-full sm:w-auto" variant="secondary" onClick={() => setReactivateTargetId(editingProduct.id)} disabled={isSubmitting || isDeleting}>
+                    Reactivate Product
+                  </Button>
+                )}
+              </div>
+            )}
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
             <Button
+              className="w-full sm:w-auto"
               variant="secondary"
               onClick={() => {
                 setIsFormOpen(false)
@@ -617,9 +603,10 @@ export function ProductsPage() {
             >
               Cancel
             </Button>
-            <Button onClick={handleSubmit} loading={isSubmitting}>
+            <Button className="w-full sm:w-auto" onClick={handleSubmit} loading={isSubmitting}>
               {editingProduct ? 'Update' : 'Create'} Product
             </Button>
+            </div>
           </div>
         </div>
       </Modal>

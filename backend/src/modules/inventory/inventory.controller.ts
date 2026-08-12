@@ -34,6 +34,13 @@ import {
  * already typed-safe by the time the handler runs.
  */
 export const inventoryController = {
+  async createInventoryLoan(req: Request, res: Response, next: NextFunction) {
+    try {
+      const body = req.validatedBody as { customerId: string; productId: string; quantity: number; paid: boolean; amount?: number; paymentMethod: 'CASH' | 'GCASH' | 'MAYA' | 'BANK_TRANSFER' }
+      const result = await inventoryService.createInventoryLoan(body, buildContext(req))
+      return res.status(httpStatus.CREATED).json(successResponse(result))
+    } catch (error) { next(error) }
+  },
   async listInventoryLoans(req: Request, res: Response, next: NextFunction) {
     try {
       const result = await inventoryService.listInventoryLoans(buildContext(req))

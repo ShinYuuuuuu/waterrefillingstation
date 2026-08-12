@@ -77,6 +77,9 @@ function toLedgerEntry(raw: any): LedgerEntry {
 }
 
 export const inventoryService = {
+  async createInventoryLoan(payload: { customerId: string; productId: string; quantity: number; paid: boolean; amount?: number; paymentMethod?: string }): Promise<void> {
+    await apiClient.post(`${API_ENDPOINTS.INVENTORY}/loans`, payload)
+  },
   async listInventoryLoans(): Promise<InventoryLoan[]> {
     const response = await apiClient.get<ApiResponse<InventoryLoan[]>>(`${API_ENDPOINTS.INVENTORY}/loans`)
     return response.data.data ?? []
